@@ -1,8 +1,11 @@
-#include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
+#include "pico/cyw43_arch.h"
 #include "lwip/tcp.h"
 #include "lwip/dns.h"
 #include "hardware/i2c.h"
+#include "hardware/adc.h"
+#include "hardware/pwm.h"
+#include "hardware/clocks.h"
 #include "ssd1306.h"
 #include <string.h>
 #include <stdio.h>
@@ -16,6 +19,15 @@
 #define PINO_SCL 14
 #define PINO_SDA 15
 
+// Pino do botão do joystick
+const int SW = 22;
+
+// Pinos usados para ADC (joystick) e PWM
+const int VRX = 26;          // Eixo X do joystick (ADC)
+const int VRY = 27;          // Eixo Y do joystick (ADC)
+#define ADC_CHANNEL_0 0      // Canal ADC para o eixo X
+#define ADC_CHANNEL_1 1      // Canal ADC para o eixo Y
+
 #define RESPONSE_BUFFER_SIZE 2048
 
 static char response_buffer[RESPONSE_BUFFER_SIZE];
@@ -24,7 +36,47 @@ static ip_addr_t server_ip;
 
 ssd1306_t disp; // Display OLED
 
-// Função de callback para processar a resposta HTTP
+// Ponteiro para o texto a ser exibido com rolagem (corpo da resposta HTTP)
+static char *display_message = NULL;
+
+/**
+ * Limpa o display OLED.
+ */
+void clear_display() {
+    ssd1306_clear(&disp);
+    ssd1306_show(&disp);
+}
+
+/**
+ * Função para escrever texto no display com rolagem sem modificar a string original.
+ *
+ * @param msg       Mensagem a ser exibida.
+ * @param offset_x  Deslocamento horizontal (em pixels).
+ * @param offset_y  Deslocamento vertical (em pixels).
+ * @param scale     Escala do texto.
+ */
+void print_texto_scroll(const char *msg, int offset_x, int offset_y, uint scale) {
+    // Cria uma cópia local da mensagem para não modificar o buffer original
+    char temp[RESPONSE_BUFFER_SIZE];
+    strncpy(temp, msg, RESPONSE_BUFFER_SIZE);
+    temp[RESPONSE_BUFFER_SIZE - 1] = '\0';
+
+    clear_display();
+
+    // Divide a mensagem em linhas (usando strtok em uma cópia local)
+    char *line = strtok(temp, "\n");
+    int y = offset_y;
+    while (line != NULL) {
+        ssd1306_draw_string(&disp, offset_x, y, scale, line);
+        y += 8 * scale; // Avança para a próxima linha (ajuste conforme a altura da fonte)
+        line = strtok(NULL, "\n");
+    }
+    ssd1306_show(&disp);
+}
+
+/**
+ * Callback para processar a resposta HTTP.
+ */
 static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
     printf("Callback HTTP\n");
     if (p == NULL) {
@@ -32,23 +84,21 @@ static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
         response_buffer[response_length] = '\0'; // Termina a string
         printf("Resposta completa do servidor:\n%s\n", response_buffer);
 
-        // Procura o início do corpo da resposta
+        // Procura o início do corpo da resposta (após o header)
         char *body = strstr(response_buffer, "\r\n\r\n");
         if (body) {
-            body += 4; // Pula as duas quebras de linha
+            body += 4; // Pula as quebras de linha
             printf("Corpo da resposta:\n%s\n", body);
-
-            // Exibe o corpo da resposta no display
-            print_texto(body, 0, 0, 1);
+            // Armazena o corpo da resposta para que o loop principal o exiba com rolagem
+            display_message = body;
         } else {
             printf("Corpo da resposta não encontrado\n");
         }
-
         tcp_close(tpcb);
         return ERR_OK;
     }
 
-    // Itera sobre a cadeia de pbufs para copiar todos os dados
+    // Copia os dados de todos os pbufs para o buffer global
     struct pbuf *q;
     for (q = p; q != NULL; q = q->next) {
         if (response_length + q->len < RESPONSE_BUFFER_SIZE) {
@@ -64,32 +114,32 @@ static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
     return ERR_OK;
 }
 
-// Callback chamado quando a conexão TCP é estabelecida
+/**
+ * Callback chamado quando a conexão TCP é estabelecida.
+ */
 static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) {
     if (err != ERR_OK) {
         printf("Erro ao conectar ao servidor: %d\n", err);
         return err;
     }
-
     if (tcp_write(tpcb, HTTP_REQUEST, strlen(HTTP_REQUEST), TCP_WRITE_FLAG_COPY) != ERR_OK) {
         printf("Erro ao enviar a requisição HTTP\n");
         return ERR_VAL;
     }
-
-    // Garante que os dados sejam enviados imediatamente
-    tcp_output(tpcb);
+    tcp_output(tpcb); // Garante envio imediato
     printf("Requisição HTTP enviada\n");
     return ERR_OK;
 }
 
-// Callback do DNS (usado somente quando o DNS não está em cache)
+/**
+ * Callback do DNS (usado quando o DNS não está em cache).
+ */
 static void dns_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg) {
     if (ipaddr == NULL) {
         printf("Erro ao resolver o endereço do servidor\n");
         return;
     }
     printf("DNS resolvido: %s\n", ipaddr_ntoa(ipaddr));
-
     // Cria o PCB e conecta ao servidor
     struct tcp_pcb *pcb = tcp_new();
     if (!pcb) {
@@ -103,15 +153,15 @@ static void dns_callback(const char *name, const ip_addr_t *ipaddr, void *callba
     }
 }
 
-// Função para enviar a requisição HTTP
+/**
+ * Função para enviar a requisição HTTP.
+ */
 static void send_http_request(void) {
-    // Reseta o buffer de resposta
     response_length = 0;
     memset(response_buffer, 0, RESPONSE_BUFFER_SIZE);
-
     err_t err = dns_gethostbyname("jsonplaceholder.typicode.com", &server_ip, dns_callback, NULL);
     if (err == ERR_OK) {
-        // Se o DNS já está em cache, o endereço já foi resolvido.
+        // Se o DNS já está em cache, conecta imediatamente.
         printf("DNS resolvido imediatamente: %s\n", ipaddr_ntoa(&server_ip));
         struct tcp_pcb *pcb = tcp_new();
         if (!pcb) {
@@ -131,18 +181,9 @@ static void send_http_request(void) {
 }
 
 /**
- * Limpa o display OLED
- */
-void clear_display() {
-    ssd1306_clear(&disp);
-    ssd1306_show(&disp);
-}
-
-/**
- * Inicializa o display OLED
+ * Inicializa o display OLED.
  */
 void init_display() {
-    // Inicializa o I2C e o display OLED
     i2c_init(I2C_PORT, 400 * 1000); // 400 KHz
     gpio_set_function(PINO_SCL, GPIO_FUNC_I2C);
     gpio_set_function(PINO_SDA, GPIO_FUNC_I2C);
@@ -150,42 +191,45 @@ void init_display() {
     gpio_pull_up(PINO_SDA);
     disp.external_vcc = false;
     ssd1306_init(&disp, 128, 64, 0x3C, I2C_PORT);
-
-    // Limpa o display
     clear_display();
 }
 
 /**
- * Função para escrever texto no display
- * 
- * @param msg   Mensagem a ser exibida
- * @param pos_x Posição X no display
- * @param pos_y Posição Y no display
- * @param scale Escala do texto
+ * Lê os valores dos eixos do joystick (X e Y).
  */
-void print_texto(char *msg, uint pos_x, uint pos_y, uint scale) {
-    // Limpa o display
-    clear_display();
-
-    // Divide a mensagem em linhas
-    char *line = strtok(msg, "\n");
-    uint y = pos_y;
-    while (line != NULL) {
-        ssd1306_draw_string(&disp, pos_x, y, scale, line);
-        y += 8 * scale; // Avança para a próxima linha
-        line = strtok(NULL, "\n");
-    }
-    ssd1306_show(&disp);
+void joystick_read_axis(uint16_t *vrx_value, uint16_t *vry_value) {
+    adc_select_input(ADC_CHANNEL_0);
+    sleep_us(2);
+    *vrx_value = adc_read();
+    adc_select_input(ADC_CHANNEL_1);
+    sleep_us(2);
+    *vry_value = adc_read();
 }
 
+/**
+ * Inicializa o joystick (botão e ADC).
+ */
+void init_joystick(){
+    gpio_init(SW);
+    gpio_set_dir(SW, GPIO_IN);
+    gpio_pull_up(SW);
+}
+
+/**
+ * Main.
+ */
 int main() {
     stdio_init_all();  // Inicializa a saída padrão
 
-    // Inicializa o display OLED
-    init_display();
+    // Inicializa ADC para leitura do joystick
+    adc_init();
 
-    // Exibe uma mensagem no display
-    print_texto("Projeto Final", 0, 0, 1);
+    // Inicializa o display OLED e o joystick
+    init_display();
+    init_joystick();
+
+    // Exibe uma mensagem inicial
+    print_texto_scroll("Projeto Final", 0, 0, 1);
 
     sleep_ms(10000);
     printf("Iniciando requisição HTTP\n");
@@ -195,10 +239,8 @@ int main() {
         printf("Erro ao inicializar o Wi-Fi\n");
         return 1;
     }
-
     cyw43_arch_enable_sta_mode();
     printf("Conectando ao Wi-Fi...\n");
-
     if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASS, CYW43_AUTH_WPA2_AES_PSK, 10000)) {
         printf("Falha ao conectar ao Wi-Fi\n");
         return 1;
@@ -207,16 +249,29 @@ int main() {
         uint8_t *ip_address = (uint8_t*)&(cyw43_state.netif[0].ip_addr.addr);
         printf("Endereço IP %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
     }
-
     printf("Wi-Fi conectado!\n");
 
     // Envia a requisição HTTP
     send_http_request();
 
-    // Loop principal para manter o Wi-Fi ativo
+    // Variáveis para leitura do joystick e cálculo dos offsets
+    uint16_t vrx_value = 0, vry_value = 0;
+    int offset_x = 0, offset_y = 0;
+
+    // Loop principal: mantém o Wi-Fi ativo e atualiza a rolagem se o corpo da resposta estiver disponível
     while (true) {
         cyw43_arch_poll();
         sleep_ms(100);
+
+        // Se o corpo da resposta foi recebido, atualiza a exibição com os offsets do joystick
+        if (display_message != NULL) {
+            joystick_read_axis(&vrx_value, &vry_value);
+            // Ajusta os deslocamentos; os divisores podem ser ajustados conforme a sensibilidade desejada
+            offset_x = (vrx_value - 2048) / 256;
+            offset_y = (vry_value - 2048) / 256;
+            print_texto_scroll(display_message, offset_x, offset_y, 1);
+            printf("Joystick X: %d, Y: %d\n", vrx_value, vry_value);
+        }
     }
 
     cyw43_arch_deinit();

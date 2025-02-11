@@ -41,6 +41,7 @@
         "*.ndjson": "jsonl",
         "*.dbclient-js": "javascript",
         "*.embeddedhtml": "html",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "pwm.h": "c"
     }
 }
