@@ -40,6 +40,9 @@ add_executable(projeto-final projeto-final.c ssd1306.c)
 pico_set_program_name(projeto-final "projeto-final")
 pico_set_program_version(projeto-final "0.1")
 
+# Generate PIO header
+pico_generate_pio_header(projeto-final ${CMAKE_CURRENT_LIST_DIR}/ws2818b.pio)
+
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(projeto-final 0)
 pico_enable_stdio_usb(projeto-final 1)
@@ -61,6 +64,10 @@ target_link_libraries(projeto-final
         hardware_pio
         hardware_adc
         hardware_pwm
+        hardware_dma
+        hardware_timer
+        hardware_pio
+        hardware_clocks
         )
 
 pico_add_extra_outputs(projeto-final)

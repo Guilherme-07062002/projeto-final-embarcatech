@@ -42,6 +42,8 @@
         "*.dbclient-js": "javascript",
         "*.embeddedhtml": "html",
         "stdio.h": "c",
-        "pwm.h": "c"
+        "pwm.h": "c",
+        "string.h": "c",
+        "clocks.h": "c"
     }
 }
