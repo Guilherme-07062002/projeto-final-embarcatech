@@ -24,13 +24,26 @@ static ip_addr_t server_ip;
 
 ssd1306_t disp; // Display OLED
 
-// Callback para processar a resposta HTTP
+// Função de callback para processar a resposta HTTP
 static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
     printf("Callback HTTP\n");
     if (p == NULL) {
         // Quando p for NULL, o servidor fechou a conexão.
         response_buffer[response_length] = '\0'; // Termina a string
         printf("Resposta completa do servidor:\n%s\n", response_buffer);
+
+        // Procura o início do corpo da resposta
+        char *body = strstr(response_buffer, "\r\n\r\n");
+        if (body) {
+            body += 4; // Pula as duas quebras de linha
+            printf("Corpo da resposta:\n%s\n", body);
+
+            // Exibe o corpo da resposta no display
+            print_texto(body, 0, 0, 1);
+        } else {
+            printf("Corpo da resposta não encontrado\n");
+        }
+
         tcp_close(tpcb);
         return ERR_OK;
     }
@@ -151,6 +164,9 @@ void init_display() {
  * @param scale Escala do texto
  */
 void print_texto(char *msg, uint pos_x, uint pos_y, uint scale) {
+    // Limpa o display
+    clear_display();
+
     ssd1306_draw_string(&disp, pos_x, pos_y, scale, msg);
     ssd1306_show(&disp);
 }
