@@ -42,11 +42,14 @@ pico_set_program_version(projeto-final "0.1")
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(projeto-final 0)
-pico_enable_stdio_usb(projeto-final 0)
+pico_enable_stdio_usb(projeto-final 1)
 
 # Add the standard library to the build
 target_link_libraries(projeto-final
-        pico_stdlib)
+        hardware_pwm
+        hardware_adc
+        pico_stdlib
+        )
 
 # Add the standard include files to the build
 target_include_directories(projeto-final PRIVATE
@@ -56,6 +59,9 @@ target_include_directories(projeto-final PRIVATE
 # Add any user requested libraries
 target_link_libraries(projeto-final 
         pico_cyw43_arch_lwip_threadsafe_background
+        hardware_i2c
+        hardware_pio
+        hardware_clocks
         )
 
 pico_add_extra_outputs(projeto-final)
