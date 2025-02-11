@@ -276,31 +276,36 @@ int main() {
     // Variáveis para leitura do joystick e cálculo dos offsets
     uint16_t vry_value = 0;
     int offset_y = 0;
+    int prev_scroll_y = scroll_y; // Armazena o valor anterior de scroll_y
 
     display_message = "O ceu e azul devido a forma como a luz do sol interage com a atmosfera da Terra. A luz do sol parece branca, mas na verdade e composta por varias cores, cada uma com um comprimento de onda diferente. Quando a luz solar entra na atmosfera, ela colide com moleculas de ar e outras particulas. A luz azul, que tem um comprimento de onda mais curto, e espalhada em todas as direcoes por essas moleculas e particulas. Esse espalhamento e chamado de espalhamento de Rayleigh. Como a luz azul e espalhada em todas as direcoes, ela chega aos nossos olhos de todos os lados, fazendo com que o ceu pareca azul. Durante o nascer e o por do sol, a luz solar tem que passar por uma porcao maior da atmosfera, o que faz com que mais luz azul seja espalhada para fora do nosso campo de visao, deixando as cores vermelha e laranja mais predominantes.";
 
+    // Se houver uma mensagem para exibir, exibe-a
+    if (display_message != NULL) {
+        print_texto_scroll(display_message, 0, 0, 1);
+    }
+
     // Loop principal: mantém o Wi-Fi ativo e atualiza a rolagem se o corpo da resposta estiver disponível
     while (true) {
-        sleep_ms(100);
-    
+        sleep_ms(50);
+
         if (display_message != NULL) {
             uint16_t vry_value = 0;
             joystick_read_axis(&vry_value); // Lê apenas o eixo Y
-    
+
             // Atualiza a rolagem vertical
             if (vry_value > JOY_THRESHOLD_UP) { // joystick inclinado para cima
                 scroll_y += SCROLL_SPEED;
             } else if (vry_value < JOY_THRESHOLD_DOWN) { // joystick inclinado para baixo
                 scroll_y -= SCROLL_SPEED;
             }
-    
-            // (Opcional) Você pode aplicar limites ao scroll_y,
-            // se souber a altura total do texto e a largura do display.
-            // Por exemplo, se o texto tiver N linhas, total_text_height = N * (8*scale)
-            // e o scroll_y não deve ser menor que -(total_text_height - display_height)
-            // ou maior que 0 (ou vice-versa, conforme a orientação desejada).
-    
-            print_texto_scroll(display_message, 0, scroll_y, 1);
+
+            // Desenha o display apenas se scroll_y mudou
+            if (scroll_y != prev_scroll_y) {
+                print_texto_scroll(display_message, 0, scroll_y, 1);
+                prev_scroll_y = scroll_y; // Atualiza o valor anterior de scroll_y
+            }
+
             printf("Joystick Y: %d   scroll_y: %d\n", vry_value, scroll_y);
         }
     }
