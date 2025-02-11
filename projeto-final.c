@@ -123,6 +123,9 @@ static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
             // Marca que a mensagem foi recebida
             mensagem_recebida = true;
 
+            // Desenha notificação na matriz de LEDs
+            draw_notification();
+
             printf("Mensagem recebida\n");
         } else {
             printf("Corpo da resposta não encontrado\n");
@@ -352,6 +355,61 @@ float mic_power() {
     }
 
 /**
+ * Desenha seta no display OLED indicando para pressionar o botão.
+ */
+void draw_arrow() {
+    npClear();
+            
+    npSetLED(2, 0, 0, 100);  
+    npSetLED(6, 0, 0, 100);  
+    npSetLED(16, 0, 0, 100); 
+    npSetLED(22, 0, 0, 100); 
+    npSetLED(10, 0, 0, 100); 
+    npSetLED(11, 0, 0, 100);
+    npSetLED(12, 0, 0, 100);
+    npSetLED(13, 0, 0, 100);
+    npSetLED(14, 0, 0, 100);
+
+    npWrite();
+}
+
+/**
+ * Desenha notificação quando mensagem é recebida.
+ */
+void draw_notification() {
+    npClear();
+            
+    npSetLED(12, 0, 100, 0);  
+    npSetLED(7, 0, 100, 0);  
+    npSetLED(11, 0, 100, 0);  
+    npSetLED(13, 0, 100, 0);  
+    npSetLED(17, 0, 100, 0);  
+    npSetLED(2, 0, 100, 0);  
+    npSetLED(6, 0, 100, 0);  
+    npSetLED(8, 0, 100, 0);  
+    npSetLED(10, 0, 100, 0);  
+    npSetLED(14, 0, 100, 0);  
+    npSetLED(16, 0, 100, 0);  
+    npSetLED(18, 0, 100, 0);  
+    npSetLED(22, 0, 100, 0);  
+    npSetLED(1, 0, 100, 0);  
+    npSetLED(3, 0, 100, 0);  
+    npSetLED(5, 0, 100, 0);  
+    npSetLED(9, 0, 100, 0);  
+    npSetLED(15, 0, 100, 0);  
+    npSetLED(19, 0, 100, 0);  
+    npSetLED(21, 0, 100, 0);  
+    npSetLED(23, 0, 100, 0);  
+
+    npWrite();
+
+    sleep_ms(500);
+
+    npClear();
+    npWrite();
+}
+
+/**
  * Main.
  */
 int main() {
@@ -369,11 +427,15 @@ int main() {
     gpio_set_dir(BUTTON_A, GPIO_IN);
     gpio_pull_up(BUTTON_A);
 
-    // Exibe uma mensagem inicial
-    print_texto_scroll("Projeto Final", 0, 0, 1);
+    // Exibe uma mensagem inicial do BitDog Assistente
+    print_texto_scroll("BitDog Assistente", 0, 0, 2);
 
     sleep_ms(10000);
     printf("Iniciando requisição HTTP\n");
+
+    // Limpando o display OLED
+    npClear();
+    npWrite();
 
     // Inicializa o Wi-Fi
     if (cyw43_arch_init()) {
@@ -541,9 +603,23 @@ int main() {
             printf("Intensidade: %d\n", intensity);
         }
 
-        // Se botão não está pressionado limpa a matriz de LEDs.
+        // Se botão não está pressionado desenha uma seta indicando para pressionar o botão.
         if (gpio_get(BUTTON_A) == 1) {
             npClear();
+            
+            npSetLED(2, 0, 0, 50);  
+            npSetLED(6, 0, 0, 50);  
+            
+            npSetLED(16, 0, 0, 50); 
+            npSetLED(22, 0, 0, 50); 
+
+            
+            npSetLED(10, 0, 0, 50); 
+            npSetLED(11, 0, 0, 50);
+            npSetLED(12, 0, 0, 50);
+            npSetLED(13, 0, 0, 50);
+            npSetLED(14, 0, 0, 50);
+
             npWrite();
         }
 
