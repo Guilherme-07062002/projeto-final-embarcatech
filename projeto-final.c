@@ -23,7 +23,6 @@
 const int SW = 22;
 
 // Pinos usados para ADC (joystick) e PWM
-const int VRX = 26;          // Eixo X do joystick (ADC)
 const int VRY = 27;          // Eixo Y do joystick (ADC)
 #define ADC_CHANNEL_0 0      // Canal ADC para o eixo X
 #define ADC_CHANNEL_1 1      // Canal ADC para o eixo Y
@@ -40,7 +39,7 @@ ssd1306_t disp; // Display OLED
 static char *display_message = NULL;
 
 // Variáveis globais para acumular a posição do scroll
-int scroll_x = 0, scroll_y = 0;
+int scroll_y = 0;
 
 // Parâmetros para definir os limiares e a velocidade do scroll
 #define JOY_THRESHOLD_UP    2500   // se ADC Y maior que este valor, rola para cima
@@ -59,11 +58,10 @@ void clear_display() {
  * Função para escrever texto no display com rolagem sem modificar a string original.
  *
  * @param msg       Mensagem a ser exibida.
- * @param offset_x  Deslocamento horizontal (em pixels).
  * @param offset_y  Deslocamento vertical (em pixels).
  * @param scale     Escala do texto.
  */
-void print_texto_scroll(const char *msg, int offset_y, uint scale) {
+void print_texto_scroll(const char *msg, int offset_x, int offset_y, uint scale) {
     // Cria uma cópia local da mensagem para não modificar o buffer original
     char temp[RESPONSE_BUFFER_SIZE];
     strncpy(temp, msg, RESPONSE_BUFFER_SIZE);
@@ -220,7 +218,8 @@ void init_display() {
  */
 void joystick_read_axis(uint16_t *vry_value) {
     if (vry_value != NULL) {
-        adc_select_input(ADC_CHANNEL_1);
+        // Se o eixo vertical estiver conectado ao ADC_CHANNEL_0, selecione este canal
+        adc_select_input(ADC_CHANNEL_0);
         sleep_us(2);
         *vry_value = adc_read();
     }
@@ -249,7 +248,7 @@ int main() {
     init_joystick();
 
     // Exibe uma mensagem inicial
-    print_texto_scroll("Projeto Final", 0, 0);
+    print_texto_scroll("Projeto Final", 0, 0, 0);
 
     sleep_ms(10000);
     printf("Iniciando requisição HTTP\n");
@@ -275,8 +274,8 @@ int main() {
     // send_http_request();
 
     // Variáveis para leitura do joystick e cálculo dos offsets
-    uint16_t vrx_value = 0, vry_value = 0;
-    int offset_x = 0, offset_y = 0;
+    uint16_t vry_value = 0;
+    int offset_y = 0;
 
     display_message = "O ceu e azul devido a forma como a luz do sol interage com a atmosfera da Terra. A luz do sol parece branca, mas na verdade e composta por varias cores, cada uma com um comprimento de onda diferente. Quando a luz solar entra na atmosfera, ela colide com moleculas de ar e outras particulas. A luz azul, que tem um comprimento de onda mais curto, e espalhada em todas as direcoes por essas moleculas e particulas. Esse espalhamento e chamado de espalhamento de Rayleigh. Como a luz azul e espalhada em todas as direcoes, ela chega aos nossos olhos de todos os lados, fazendo com que o ceu pareca azul. Durante o nascer e o por do sol, a luz solar tem que passar por uma porcao maior da atmosfera, o que faz com que mais luz azul seja espalhada para fora do nosso campo de visao, deixando as cores vermelha e laranja mais predominantes.";
 
@@ -301,7 +300,7 @@ int main() {
             // e o scroll_y não deve ser menor que -(total_text_height - display_height)
             // ou maior que 0 (ou vice-versa, conforme a orientação desejada).
     
-            print_texto_scroll(display_message, scroll_y, 1);
+            print_texto_scroll(display_message, 0, scroll_y, 1);
             printf("Joystick Y: %d   scroll_y: %d\n", vry_value, scroll_y);
         }
     }
