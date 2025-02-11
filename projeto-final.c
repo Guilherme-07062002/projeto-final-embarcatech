@@ -39,6 +39,14 @@ ssd1306_t disp; // Display OLED
 // Ponteiro para o texto a ser exibido com rolagem (corpo da resposta HTTP)
 static char *display_message = NULL;
 
+// Variáveis globais para acumular a posição do scroll
+int scroll_x = 0, scroll_y = 0;
+
+// Parâmetros para definir os limiares e a velocidade do scroll
+#define JOY_THRESHOLD_UP    2500   // se ADC Y maior que este valor, rola para cima
+#define JOY_THRESHOLD_DOWN  1600   // se ADC Y menor que este valor, rola para baixo
+#define SCROLL_SPEED        2      // pixels por iteração
+
 /**
  * Limpa o display OLED.
  */
@@ -263,14 +271,31 @@ int main() {
         cyw43_arch_poll();
         sleep_ms(100);
 
-        // Se o corpo da resposta foi recebido, atualiza a exibição com os offsets do joystick
         if (display_message != NULL) {
+            uint16_t vrx_value = 0, vry_value = 0;
             joystick_read_axis(&vrx_value, &vry_value);
-            // Ajusta os deslocamentos; os divisores podem ser ajustados conforme a sensibilidade desejada
-            offset_x = (vrx_value - 2048) / 256;
-            offset_y = (vry_value - 2048) / 256;
-            print_texto_scroll(display_message, offset_x, offset_y, 1);
-            printf("Joystick X: %d, Y: %d\n", vrx_value, vry_value);
+            
+            // Atualiza a rolagem vertical
+            if (vry_value > JOY_THRESHOLD_UP) { // joystick inclinado para cima
+                scroll_y -= SCROLL_SPEED;
+            } else if (vry_value < JOY_THRESHOLD_DOWN) { // joystick inclinado para baixo
+                scroll_y += SCROLL_SPEED;
+            }
+            // Atualiza a rolagem horizontal (se necessário)
+            if (vrx_value > JOY_THRESHOLD_UP) {
+                scroll_x -= SCROLL_SPEED;
+            } else if (vrx_value < JOY_THRESHOLD_DOWN) {
+                scroll_x += SCROLL_SPEED;
+            }
+            
+            // (Opcional) Você pode aplicar limites ao scroll_y e scroll_x,
+            // se souber a altura total do texto e a largura do display.
+            // Por exemplo, se o texto tiver N linhas, total_text_height = N * (8*scale)
+            // e o scroll_y não deve ser menor que -(total_text_height - display_height)
+            // ou maior que 0 (ou vice-versa, conforme a orientação desejada).
+
+            print_texto_scroll(display_message, scroll_x, scroll_y, 1);
+            printf("Joystick X: %d, Y: %d   scroll_x: %d, scroll_y: %d\n", vrx_value, vry_value, scroll_x, scroll_y);
         }
     }
 
