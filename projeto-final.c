@@ -167,7 +167,14 @@ void print_texto(char *msg, uint pos_x, uint pos_y, uint scale) {
     // Limpa o display
     clear_display();
 
-    ssd1306_draw_string(&disp, pos_x, pos_y, scale, msg);
+    // Divide a mensagem em linhas
+    char *line = strtok(msg, "\n");
+    uint y = pos_y;
+    while (line != NULL) {
+        ssd1306_draw_string(&disp, pos_x, y, scale, line);
+        y += 8 * scale; // Avança para a próxima linha
+        line = strtok(NULL, "\n");
+    }
     ssd1306_show(&disp);
 }
 
