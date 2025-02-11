@@ -15,7 +15,11 @@
 
 #define WIFI_SSID "CAVALO_DE_TROIA"
 #define WIFI_PASS "81001693"
+// #define HTTP_REQUEST "GET / HTTP/1.1\r\nHost: 26.229.223.113:3000\r\nConnection: close\r\n\r\n"
 #define HTTP_REQUEST "GET /todos/1 HTTP/1.1\r\nHost: jsonplaceholder.typicode.com\r\nConnection: close\r\n\r\n"
+
+// Variavel que indica que a mensagem foi recebida
+bool mensagem_recebida = false;
 
 #define BUTTON_A 5    // GPIO conectado ao Botão A
 
@@ -115,6 +119,11 @@ static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
             printf("Corpo da resposta:\n%s\n", body);
             // Armazena o corpo da resposta para que o loop principal o exiba com rolagem
             display_message = body;
+
+            // Marca que a mensagem foi recebida
+            mensagem_recebida = true;
+
+            printf("Mensagem recebida\n");
         } else {
             printf("Corpo da resposta não encontrado\n");
         }
@@ -203,6 +212,28 @@ static void send_http_request(void) {
         printf("Erro ao iniciar a resolução do DNS\n");
     }
 }
+
+// /**
+//  * Função para enviar a requisição HTTP.
+//  */
+// static void send_http_request(void) {
+//     response_length = 0;
+//     memset(response_buffer, 0, RESPONSE_BUFFER_SIZE);
+//     ip4addr_aton("26.229.223.113", &server_ip); // Usa o IP do servidor
+
+//     struct tcp_pcb *pcb = tcp_new();
+//     if (!pcb) {
+//         printf("Erro ao criar PCB\n");
+//         return;
+//     }
+//     tcp_recv(pcb, http_client_callback);
+//     // Se o servidor estiver escutando na porta 3000, mantenha; caso contrário, altere a porta.
+//     if (tcp_connect(pcb, &server_ip, 3000, tcp_connected_callback) != ERR_OK) {
+//         printf("Erro ao conectar ao servidor\n");
+//         return;
+//     }
+// }
+
 
 /**
  * Inicializa o display OLED.
@@ -344,25 +375,25 @@ int main() {
     sleep_ms(10000);
     printf("Iniciando requisição HTTP\n");
 
-    // Inicializa o Wi-Fi (comentado para foco na coleta de áudio e exibição de texto)
-    // if (cyw43_arch_init()) {
-    //     printf("Erro ao inicializar o Wi-Fi\n");
-    //     return 1;
-    // }
-    // cyw43_arch_enable_sta_mode();
-    // printf("Conectando ao Wi-Fi...\n");
-    // if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASS, CYW43_AUTH_WPA2_AES_PSK, 10000)) {
-    //     printf("Falha ao conectar ao Wi-Fi\n");
-    //     return 1;
-    // } else {
-    //     printf("Conectado.\n");
-    //     uint8_t *ip_address = (uint8_t*)&(cyw43_state.netif[0].ip_addr.addr);
-    //     printf("Endereço IP %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
-    // }
-    // printf("Wi-Fi conectado!\n");
+    // Inicializa o Wi-Fi
+    if (cyw43_arch_init()) {
+        printf("Erro ao inicializar o Wi-Fi\n");
+        return 1;
+    }
+    cyw43_arch_enable_sta_mode();
+    printf("Conectando ao Wi-Fi...\n");
+    if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASS, CYW43_AUTH_WPA2_AES_PSK, 10000)) {
+        printf("Falha ao conectar ao Wi-Fi\n");
+        return 1;
+    } else {
+        printf("Conectado.\n");
+        uint8_t *ip_address = (uint8_t*)&(cyw43_state.netif[0].ip_addr.addr);
+        printf("Endereço IP %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
+    }
+    printf("Wi-Fi conectado!\n");
 
     // Envia a requisição HTTP (comentado para foco na coleta de áudio e exibição de texto)
-    // send_http_request();
+    send_http_request();
 
     // Preparação da matriz de LEDs.
     printf("Preparando NeoPixel...\n");
@@ -409,16 +440,18 @@ int main() {
     int offset_y = 0;
     int prev_scroll_y = scroll_y; // Armazena o valor anterior de scroll_y
 
-    display_message = "O ceu e azul devido a forma como a luz do sol interage com a atmosfera da Terra. A luz do sol parece branca, mas na verdade e composta por varias cores, cada uma com um comprimento de onda diferente. Quando a luz solar entra na atmosfera, ela colide com moleculas de ar e outras particulas. A luz azul, que tem um comprimento de onda mais curto, e espalhada em todas as direcoes por essas moleculas e particulas. Esse espalhamento e chamado de espalhamento de Rayleigh. Como a luz azul e espalhada em todas as direcoes, ela chega aos nossos olhos de todos os lados, fazendo com que o ceu pareca azul. Durante o nascer e o por do sol, a luz solar tem que passar por uma porcao maior da atmosfera, o que faz com que mais luz azul seja espalhada para fora do nosso campo de visao, deixando as cores vermelha e laranja mais predominantes.";
-
-    // Se houver uma mensagem para exibir, exibe-a
-    if (display_message != NULL) {
-        print_texto_scroll(display_message, 0, 0, 1);
-    }
-
     // Loop principal: coleta áudio e atualiza a rolagem se o corpo da resposta estiver disponível
     while (true) {
+        cyw43_arch_poll();  // Necessário para manter o Wi-Fi ativo
         sleep_ms(50);
+
+            // Se mensagem foi recebida, exibe
+            if (mensagem_recebida == true) {
+                print_texto_scroll(display_message, 0, 0, 1);
+
+                // Marca que a mensagem foi exibida
+                mensagem_recebida = false;
+            }
 
         // Verifica se o botão está pressionado
         while (gpio_get(BUTTON_A) == 0) {
@@ -483,8 +516,6 @@ int main() {
                 print_texto_scroll(display_message, 0, scroll_y, 1);
                 prev_scroll_y = scroll_y; // Atualiza o valor anterior de scroll_y
             }
-
-            printf("Joystick Y: %d   scroll_y: %d\n", vry_value, scroll_y);
         }
     }
 
