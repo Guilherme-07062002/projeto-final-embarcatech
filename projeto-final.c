@@ -2,19 +2,27 @@
 #include "pico/stdlib.h"
 #include "lwip/tcp.h"
 #include "lwip/dns.h"
+#include "hardware/i2c.h"
+#include "ssd1306.h"
 #include <string.h>
 #include <stdio.h>
 
-#define LED_PIN 12
 #define WIFI_SSID "CAVALO_DE_TROIA"
 #define WIFI_PASS "81001693"
 #define HTTP_REQUEST "GET /todos/1 HTTP/1.1\r\nHost: jsonplaceholder.typicode.com\r\nConnection: close\r\n\r\n"
+
+// Pinos e módulo I2C
+#define I2C_PORT i2c1
+#define PINO_SCL 14
+#define PINO_SDA 15
 
 #define RESPONSE_BUFFER_SIZE 2048
 
 static char response_buffer[RESPONSE_BUFFER_SIZE];
 static int response_length = 0;
 static ip_addr_t server_ip;
+
+ssd1306_t disp; // Display OLED
 
 // Callback para processar a resposta HTTP
 static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
@@ -109,8 +117,53 @@ static void send_http_request(void) {
     }
 }
 
+/**
+ * Limpa o display OLED
+ */
+void clear_display() {
+    ssd1306_clear(&disp);
+    ssd1306_show(&disp);
+}
+
+/**
+ * Inicializa o display OLED
+ */
+void init_display() {
+    // Inicializa o I2C e o display OLED
+    i2c_init(I2C_PORT, 400 * 1000); // 400 KHz
+    gpio_set_function(PINO_SCL, GPIO_FUNC_I2C);
+    gpio_set_function(PINO_SDA, GPIO_FUNC_I2C);
+    gpio_pull_up(PINO_SCL);
+    gpio_pull_up(PINO_SDA);
+    disp.external_vcc = false;
+    ssd1306_init(&disp, 128, 64, 0x3C, I2C_PORT);
+
+    // Limpa o display
+    clear_display();
+}
+
+/**
+ * Função para escrever texto no display
+ * 
+ * @param msg   Mensagem a ser exibida
+ * @param pos_x Posição X no display
+ * @param pos_y Posição Y no display
+ * @param scale Escala do texto
+ */
+void print_texto(char *msg, uint pos_x, uint pos_y, uint scale) {
+    ssd1306_draw_string(&disp, pos_x, pos_y, scale, msg);
+    ssd1306_show(&disp);
+}
+
 int main() {
     stdio_init_all();  // Inicializa a saída padrão
+
+    // Inicializa o display OLED
+    init_display();
+
+    // Exibe uma mensagem no display
+    print_texto("Projeto Final", 0, 0, 1);
+
     sleep_ms(10000);
     printf("Iniciando requisição HTTP\n");
 

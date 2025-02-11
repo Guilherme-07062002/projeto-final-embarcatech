@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(projeto-final projeto-final.c )
+add_executable(projeto-final projeto-final.c ssd1306.c)
 
 pico_set_program_name(projeto-final "projeto-final")
 pico_set_program_version(projeto-final "0.1")
@@ -46,8 +46,6 @@ pico_enable_stdio_usb(projeto-final 1)
 
 # Add the standard library to the build
 target_link_libraries(projeto-final
-        hardware_pwm
-        hardware_adc
         pico_stdlib
         )
 
@@ -61,7 +59,8 @@ target_link_libraries(projeto-final
         pico_cyw43_arch_lwip_threadsafe_background
         hardware_i2c
         hardware_pio
-        hardware_clocks
+        hardware_adc
+        hardware_pwm
         )
 
 pico_add_extra_outputs(projeto-final)
