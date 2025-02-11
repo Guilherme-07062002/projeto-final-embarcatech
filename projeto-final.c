@@ -63,7 +63,7 @@ void clear_display() {
  * @param offset_y  Deslocamento vertical (em pixels).
  * @param scale     Escala do texto.
  */
-void print_texto_scroll(const char *msg, int offset_x, int offset_y, uint scale) {
+void print_texto_scroll(const char *msg, int offset_y, uint scale) {
     // Cria uma cópia local da mensagem para não modificar o buffer original
     char temp[RESPONSE_BUFFER_SIZE];
     strncpy(temp, msg, RESPONSE_BUFFER_SIZE);
@@ -71,13 +71,26 @@ void print_texto_scroll(const char *msg, int offset_x, int offset_y, uint scale)
 
     clear_display();
 
-    // Divide a mensagem em linhas (usando strtok em uma cópia local)
-    char *line = strtok(temp, "\n");
+    // Variáveis para controle de posição e largura do display
+    int display_width = 128; // Largura do display em pixels
+    int char_width = 6 * scale; // Largura de um caractere em pixels (ajuste conforme necessário)
+    int max_chars_per_line = display_width / char_width; // Número máximo de caracteres por linha
+
+    // Divide a mensagem em palavras
+    char *word = strtok(temp, " ");
+    int x = 0;
     int y = offset_y;
-    while (line != NULL) {
-        ssd1306_draw_string(&disp, offset_x, y, scale, line);
-        y += 8 * scale; // Avança para a próxima linha (ajuste conforme a altura da fonte)
-        line = strtok(NULL, "\n");
+    while (word != NULL) {
+        int word_length = strlen(word);
+        if (x + word_length * char_width > display_width) {
+            // Se a palavra não cabe na linha atual, move para a próxima linha
+            x = 0;
+            y += 8 * scale;
+        }
+        // Desenha a palavra no display
+        ssd1306_draw_string(&disp, x, y, scale, word);
+        x += (word_length + 1) * char_width; // Avança a posição x (inclui espaço)
+        word = strtok(NULL, " ");
     }
     ssd1306_show(&disp);
 }
@@ -203,15 +216,14 @@ void init_display() {
 }
 
 /**
- * Lê os valores dos eixos do joystick (X e Y).
+ * Lê os valores dos eixos do joystick no eixo Y.
  */
-void joystick_read_axis(uint16_t *vrx_value, uint16_t *vry_value) {
-    adc_select_input(ADC_CHANNEL_0);
-    sleep_us(2);
-    *vrx_value = adc_read();
-    adc_select_input(ADC_CHANNEL_1);
-    sleep_us(2);
-    *vry_value = adc_read();
+void joystick_read_axis(uint16_t *vry_value) {
+    if (vry_value != NULL) {
+        adc_select_input(ADC_CHANNEL_1);
+        sleep_us(2);
+        *vry_value = adc_read();
+    }
 }
 
 /**
@@ -237,65 +249,60 @@ int main() {
     init_joystick();
 
     // Exibe uma mensagem inicial
-    print_texto_scroll("Projeto Final", 0, 0, 1);
+    print_texto_scroll("Projeto Final", 0, 0);
 
     sleep_ms(10000);
     printf("Iniciando requisição HTTP\n");
 
-    // Inicializa o Wi-Fi
-    if (cyw43_arch_init()) {
-        printf("Erro ao inicializar o Wi-Fi\n");
-        return 1;
-    }
-    cyw43_arch_enable_sta_mode();
-    printf("Conectando ao Wi-Fi...\n");
-    if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASS, CYW43_AUTH_WPA2_AES_PSK, 10000)) {
-        printf("Falha ao conectar ao Wi-Fi\n");
-        return 1;
-    } else {
-        printf("Conectado.\n");
-        uint8_t *ip_address = (uint8_t*)&(cyw43_state.netif[0].ip_addr.addr);
-        printf("Endereço IP %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
-    }
-    printf("Wi-Fi conectado!\n");
+    // // Inicializa o Wi-Fi
+    // if (cyw43_arch_init()) {
+    //     printf("Erro ao inicializar o Wi-Fi\n");
+    //     return 1;
+    // }
+    // cyw43_arch_enable_sta_mode();
+    // printf("Conectando ao Wi-Fi...\n");
+    // if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASS, CYW43_AUTH_WPA2_AES_PSK, 10000)) {
+    //     printf("Falha ao conectar ao Wi-Fi\n");
+    //     return 1;
+    // } else {
+    //     printf("Conectado.\n");
+    //     uint8_t *ip_address = (uint8_t*)&(cyw43_state.netif[0].ip_addr.addr);
+    //     printf("Endereço IP %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
+    // }
+    // printf("Wi-Fi conectado!\n");
 
-    // Envia a requisição HTTP
-    send_http_request();
+    // // Envia a requisição HTTP
+    // send_http_request();
 
     // Variáveis para leitura do joystick e cálculo dos offsets
     uint16_t vrx_value = 0, vry_value = 0;
     int offset_x = 0, offset_y = 0;
 
+    display_message = "O ceu e azul devido a forma como a luz do sol interage com a atmosfera da Terra. A luz do sol parece branca, mas na verdade e composta por varias cores, cada uma com um comprimento de onda diferente. Quando a luz solar entra na atmosfera, ela colide com moleculas de ar e outras particulas. A luz azul, que tem um comprimento de onda mais curto, e espalhada em todas as direcoes por essas moleculas e particulas. Esse espalhamento e chamado de espalhamento de Rayleigh. Como a luz azul e espalhada em todas as direcoes, ela chega aos nossos olhos de todos os lados, fazendo com que o ceu pareca azul. Durante o nascer e o por do sol, a luz solar tem que passar por uma porcao maior da atmosfera, o que faz com que mais luz azul seja espalhada para fora do nosso campo de visao, deixando as cores vermelha e laranja mais predominantes.";
+
     // Loop principal: mantém o Wi-Fi ativo e atualiza a rolagem se o corpo da resposta estiver disponível
     while (true) {
-        cyw43_arch_poll();
         sleep_ms(100);
-
+    
         if (display_message != NULL) {
-            uint16_t vrx_value = 0, vry_value = 0;
-            joystick_read_axis(&vrx_value, &vry_value);
-            
+            uint16_t vry_value = 0;
+            joystick_read_axis(&vry_value); // Lê apenas o eixo Y
+    
             // Atualiza a rolagem vertical
             if (vry_value > JOY_THRESHOLD_UP) { // joystick inclinado para cima
-                scroll_y -= SCROLL_SPEED;
-            } else if (vry_value < JOY_THRESHOLD_DOWN) { // joystick inclinado para baixo
                 scroll_y += SCROLL_SPEED;
+            } else if (vry_value < JOY_THRESHOLD_DOWN) { // joystick inclinado para baixo
+                scroll_y -= SCROLL_SPEED;
             }
-            // Atualiza a rolagem horizontal (se necessário)
-            if (vrx_value > JOY_THRESHOLD_UP) {
-                scroll_x -= SCROLL_SPEED;
-            } else if (vrx_value < JOY_THRESHOLD_DOWN) {
-                scroll_x += SCROLL_SPEED;
-            }
-            
-            // (Opcional) Você pode aplicar limites ao scroll_y e scroll_x,
+    
+            // (Opcional) Você pode aplicar limites ao scroll_y,
             // se souber a altura total do texto e a largura do display.
             // Por exemplo, se o texto tiver N linhas, total_text_height = N * (8*scale)
             // e o scroll_y não deve ser menor que -(total_text_height - display_height)
             // ou maior que 0 (ou vice-versa, conforme a orientação desejada).
-
-            print_texto_scroll(display_message, scroll_x, scroll_y, 1);
-            printf("Joystick X: %d, Y: %d   scroll_x: %d, scroll_y: %d\n", vrx_value, vry_value, scroll_x, scroll_y);
+    
+            print_texto_scroll(display_message, scroll_y, 1);
+            printf("Joystick Y: %d   scroll_y: %d\n", vry_value, scroll_y);
         }
     }
 
