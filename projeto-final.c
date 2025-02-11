@@ -410,6 +410,23 @@ void draw_notification() {
 }
 
 /**
+ * Desenha sorriso na matriz de LEDs.
+ */
+void draw_smile() {
+    npClear();
+            
+    npSetLED(16, 0, 100, 0);  
+    npSetLED(18, 0, 100, 0);  
+    npSetLED(14, 0, 100, 0);  
+    npSetLED(6, 0, 100, 0);  
+    npSetLED(7, 0, 100, 0);  
+    npSetLED(8, 0, 100, 0);  
+    npSetLED(11, 0, 100, 0);  
+
+    npWrite();
+}
+
+/**
  * Main.
  */
 int main() {
@@ -433,10 +450,6 @@ int main() {
     sleep_ms(10000);
     printf("Iniciando requisição HTTP\n");
 
-    // Limpando o display OLED
-    npClear();
-    npWrite();
-
     // Inicializa o Wi-Fi
     if (cyw43_arch_init()) {
         printf("Erro ao inicializar o Wi-Fi\n");
@@ -458,7 +471,6 @@ int main() {
     send_http_request();
 
     // Preparação da matriz de LEDs.
-    printf("Preparando NeoPixel...\n");
     npInit(LED_PIN, LED_COUNT);
 
     // Preparação do ADC.
