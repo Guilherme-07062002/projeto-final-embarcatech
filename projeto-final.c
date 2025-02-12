@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <stdint.h>
+#include <stddef.h>
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 #include "lwip/tcp.h"
@@ -15,8 +17,6 @@
 
 #define WIFI_SSID "CAVALO_DE_TROIA"
 #define WIFI_PASS "81001693"
-
-#define POST_DATA "{\"message\": \"Porque o céu é azul?\"}"
 
 // Variavel que indica que a mensagem foi recebida
 bool mensagem_recebida = false;
@@ -58,6 +58,10 @@ bool esta_processando = false;
 
 // Variável para indicar se a inicialização foi completada
 bool inicializacao_completa = false;
+
+#define MAX_AUDIO_SAMPLES 16000  // Exemplo: espaço para 16.000 amostras (ajuste conforme necessário)
+uint16_t audio_buffer[MAX_AUDIO_SAMPLES];
+volatile int audio_index = 0;
 
 // Parâmetros para definir os limiares e a velocidade do scroll
 #define JOY_THRESHOLD_UP    2500   // se ADC Y maior que este valor, rola para cima
@@ -172,29 +176,51 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
         return err;
     }
 
-    // Construir a requisição HTTP dinamicamente
-    char http_request[512];
-    int post_data_length = strlen(POST_DATA);
+    // Declara apenas as variáveis que serão utilizadas
+    char http_request[2048];
+    char json_body[2048];
+
+    // Guarde o valor atual de audio_index para calcular o total de bytes
+    size_t captured_audio_bytes = audio_index * sizeof(uint16_t);
+    size_t required_size = 4 * ((captured_audio_bytes + 2) / 3) + 1;
+
+    // Aloca dinamicamente o buffer para o áudio codificado
+    char *encoded_audio = malloc(required_size);
+    if (!encoded_audio) {
+        printf("Erro: memória insuficiente para a codificação base64\n");
+        return ERR_MEM;
+    }
+
+    base64_encode((const uint8_t*)audio_buffer, captured_audio_bytes, encoded_audio, required_size);
+    printf("Áudio codificado em base64: %s\n", encoded_audio);
+
+    // Monta o corpo JSON com o áudio codificado
+    snprintf(json_body, sizeof(json_body), "{\"audioBase64\": \"%s\"}", encoded_audio);
+    int json_length = strlen(json_body);
+
     snprintf(http_request, sizeof(http_request),
-             "POST /ai?senha=secret-bitdog HTTP/1.1\r\n"
+             "POST /voice-to-text?senha=secret-bitdog HTTP/1.1\r\n"
              "Host: bitdog-api.guilherme762002.workers.dev\r\n"
              "User-Agent: PicoClient/1.0\r\n"
              "Accept: */*\r\n"
              "Content-Type: application/json\r\n"
              "Content-Length: %d\r\n"
-             "Connection: close\r\n"
-             "Cache-Control: no-cache\r\n\r\n"
+             "Connection: close\r\n\r\n"
              "%s",
-             post_data_length, POST_DATA);
+             json_length, json_body);
 
     if (tcp_write(tpcb, http_request, strlen(http_request), TCP_WRITE_FLAG_COPY) != ERR_OK) {
         printf("Erro ao enviar a requisição HTTP\n");
+        free(encoded_audio);
         return ERR_VAL;
     }
-    tcp_output(tpcb); // Garante envio imediato
+    tcp_output(tpcb); // Envia imediatamente
     printf("Requisição HTTP enviada\n");
+
+    free(encoded_audio);
     return ERR_OK;
 }
+
 
 /**
  * Callback do DNS (usado quando o DNS não está em cache).
@@ -417,6 +443,53 @@ void draw_smile() {
     npWrite();
 }
 
+// Função para capturar e armazenar um bloco de amostras
+void capture_audio_block() {
+    size_t total_bytes = audio_index * sizeof(uint16_t);
+    // Captura um bloco de SAMPLES amostras (já implementado em sample_mic())
+    sample_mic();
+    // Verifica se há espaço suficiente no buffer global
+    if (audio_index + SAMPLES < MAX_AUDIO_SAMPLES) {
+        // Copia as amostras capturadas para o buffer global
+        memcpy(&audio_buffer[audio_index], adc_buffer, SAMPLES * sizeof(uint16_t));
+        audio_index += SAMPLES;
+    } else {
+        // Buffer cheio - pode definir uma flag para interromper a gravação ou descartar o excesso
+        printf("Buffer de áudio cheio!\n");
+    }
+}
+
+static const char base64_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+// Tabela para calcular os caracteres de padding
+static const int mod_table[] = {0, 2, 1};
+
+void base64_encode(const uint8_t *data, size_t input_length, char *encoded_data, size_t encoded_size) {
+    size_t output_length = 4 * ((input_length + 2) / 3);
+    if (encoded_size < output_length + 1) {
+        // O buffer fornecido não é grande o suficiente
+        return;
+    }
+    size_t i, j;
+    for (i = 0, j = 0; i < input_length;) {
+        uint32_t octet_a = i < input_length ? data[i++] : 0;
+        uint32_t octet_b = i < input_length ? data[i++] : 0;
+        uint32_t octet_c = i < input_length ? data[i++] : 0;
+
+        uint32_t triple = (octet_a << 16) + (octet_b << 8) + octet_c;
+
+        encoded_data[j++] = base64_chars[(triple >> 18) & 0x3F];
+        encoded_data[j++] = base64_chars[(triple >> 12) & 0x3F];
+        encoded_data[j++] = base64_chars[(triple >> 6) & 0x3F];
+        encoded_data[j++] = base64_chars[triple & 0x3F];
+    }
+    // Adiciona os '=' conforme necessário
+    for (i = 0; i < mod_table[input_length % 3]; i++) {
+        encoded_data[output_length - 1 - i] = '=';
+    }
+    encoded_data[output_length] = '\0';
+}
+
 /**
  * Main.
  */
@@ -437,6 +510,9 @@ int main() {
     gpio_init(BUTTON_A);
     gpio_set_dir(BUTTON_A, GPIO_IN);
     gpio_pull_up(BUTTON_A);
+
+    // Inicialização do buffer: zera o índice antes da gravação
+    audio_index = 0;
 
     print_texto_scroll("Inicializando Assistente BitDog AI", 0, 0, 1);
 
@@ -519,6 +595,9 @@ int main() {
         // Verifica se o botão está pressionado
         while (gpio_get(BUTTON_A) == 0) {
             print_texto_scroll("Captando a sua pergunta...", 0, 0, 1);
+
+            // Captura áudio enquanto o botão estiver pressionado
+            capture_audio_block();
                     
             // Realiza uma amostragem do microfone.
             sample_mic();
@@ -610,7 +689,12 @@ int main() {
         }
         
         if (gpio_get(BUTTON_A) == 1) {
+            
             if (botao_foi_pressionado == true) {
+                // Quando o botão for solto, a gravação está finalizada.
+                // Aqui, audio_index contém o número total de amostras gravadas.
+                printf("Gravação finalizada: %d amostras capturadas.\n", audio_index);
+
                 print_texto_scroll("Processando...", 0, 0, 1);
                 display_message = NULL; // Limpa a mensagem exibida
 
@@ -624,6 +708,9 @@ int main() {
                 // Marca que o botão foi pressionado
                 botao_foi_pressionado = false;
                 esta_processando = true;
+
+                // Esvazia o buffer de áudio
+                audio_index = 0;
             }
 
             // Atualiza a rolagem do texto
