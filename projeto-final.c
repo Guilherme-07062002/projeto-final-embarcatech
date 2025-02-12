@@ -15,8 +15,8 @@
 
 #define WIFI_SSID "CAVALO_DE_TROIA"
 #define WIFI_PASS "81001693"
-// #define HTTP_REQUEST "GET / HTTP/1.1\r\nHost: 26.229.223.113:3000\r\nConnection: close\r\n\r\n"
-#define HTTP_REQUEST "GET /todos/1 HTTP/1.1\r\nHost: jsonplaceholder.typicode.com\r\nConnection: close\r\n\r\n"
+
+#define HTTP_REQUEST "GET / HTTP/1.1\r\nHost: teste.guilherme762002.workers.dev\r\nUser-Agent: PicoClient/1.0\r\nAccept: */*\r\nConnection: close\r\nCache-Control: no-cache\r\n\r\n"
 
 // Variavel que indica que a mensagem foi recebida
 bool mensagem_recebida = false;
@@ -195,7 +195,7 @@ static void dns_callback(const char *name, const ip_addr_t *ipaddr, void *callba
 static void send_http_request(void) {
     response_length = 0;
     memset(response_buffer, 0, RESPONSE_BUFFER_SIZE);
-    err_t err = dns_gethostbyname("jsonplaceholder.typicode.com", &server_ip, dns_callback, NULL);
+    err_t err = dns_gethostbyname("teste.guilherme762002.workers.dev", &server_ip, dns_callback, NULL);
     if (err == ERR_OK) {
         // Se o DNS já está em cache, conecta imediatamente.
         printf("DNS resolvido imediatamente: %s\n", ipaddr_ntoa(&server_ip));
@@ -215,28 +215,6 @@ static void send_http_request(void) {
         printf("Erro ao iniciar a resolução do DNS\n");
     }
 }
-
-// /**
-//  * Função para enviar a requisição HTTP.
-//  */
-// static void send_http_request(void) {
-//     response_length = 0;
-//     memset(response_buffer, 0, RESPONSE_BUFFER_SIZE);
-//     ip4addr_aton("26.229.223.113", &server_ip); // Usa o IP do servidor
-
-//     struct tcp_pcb *pcb = tcp_new();
-//     if (!pcb) {
-//         printf("Erro ao criar PCB\n");
-//         return;
-//     }
-//     tcp_recv(pcb, http_client_callback);
-//     // Se o servidor estiver escutando na porta 3000, mantenha; caso contrário, altere a porta.
-//     if (tcp_connect(pcb, &server_ip, 3000, tcp_connected_callback) != ERR_OK) {
-//         printf("Erro ao conectar ao servidor\n");
-//         return;
-//     }
-// }
-
 
 /**
  * Inicializa o display OLED.
@@ -619,18 +597,18 @@ int main() {
         if (gpio_get(BUTTON_A) == 1) {
             npClear();
             
-            npSetLED(2, 0, 0, 50);  
-            npSetLED(6, 0, 0, 50);  
+            // npSetLED(2, 0, 0, 50);  
+            // npSetLED(6, 0, 0, 50);  
             
-            npSetLED(16, 0, 0, 50); 
-            npSetLED(22, 0, 0, 50); 
+            // npSetLED(16, 0, 0, 50); 
+            // npSetLED(22, 0, 0, 50); 
 
             
-            npSetLED(10, 0, 0, 50); 
-            npSetLED(11, 0, 0, 50);
-            npSetLED(12, 0, 0, 50);
-            npSetLED(13, 0, 0, 50);
-            npSetLED(14, 0, 0, 50);
+            // npSetLED(10, 0, 0, 50); 
+            // npSetLED(11, 0, 0, 50);
+            // npSetLED(12, 0, 0, 50);
+            // npSetLED(13, 0, 0, 50);
+            // npSetLED(14, 0, 0, 50);
 
             npWrite();
         }
