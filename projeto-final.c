@@ -50,6 +50,9 @@ static char *display_message = NULL;
 // Variáveis globais para acumular a posição do scroll
 int scroll_y = 0;
 
+// Variavel que irá indicar quando o botão foi pressionado para enviar a requisição HTTP
+bool botao_foi_pressionado = false;
+
 // Parâmetros para definir os limiares e a velocidade do scroll
 #define JOY_THRESHOLD_UP    2500   // se ADC Y maior que este valor, rola para cima
 #define JOY_THRESHOLD_DOWN  1600   // se ADC Y menor que este valor, rola para baixo
@@ -61,6 +64,9 @@ int scroll_y = 0;
 void clear_display() {
     ssd1306_clear(&disp);
     ssd1306_show(&disp);
+
+    npClear();
+    npWrite();
 }
 
 /**
@@ -438,8 +444,7 @@ int main() {
     gpio_set_dir(BUTTON_A, GPIO_IN);
     gpio_pull_up(BUTTON_A);
 
-    // Exibe uma mensagem inicial do BitDog Assistente
-    print_texto_scroll("BitDog Assistente", 0, 0, 2);
+    print_texto_scroll("Inicializando BitDog AI", 0, 0, 1);
 
     sleep_ms(10000);
     printf("Iniciando requisição HTTP\n");
@@ -460,9 +465,6 @@ int main() {
         printf("Endereço IP %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
     }
     printf("Wi-Fi conectado!\n");
-
-    // Envia a requisição HTTP (comentado para foco na coleta de áudio e exibição de texto)
-    send_http_request();
 
     // Preparação da matriz de LEDs.
     npInit(LED_PIN, LED_COUNT);
@@ -501,7 +503,7 @@ int main() {
     sample_mic();
     printf("Configurações completas!\n");
 
-    printf("\n----\nIniciando loop...\n----\n");
+    print_texto_scroll("Pressione e segure o botao A para fazer uma pergunta", 0, 0, 1);
 
     // Variáveis para leitura do joystick e cálculo dos offsets
     uint16_t vry_value = 0;
@@ -523,6 +525,7 @@ int main() {
 
         // Verifica se o botão está pressionado
         while (gpio_get(BUTTON_A) == 0) {
+            print_texto_scroll("Captando a sua pergunta...", 0, 0, 1);
                     
             // Realiza uma amostragem do microfone.
             sample_mic();
@@ -605,47 +608,52 @@ int main() {
             // Atualiza a matriz.
             npWrite();
 
-            // Exibe intensidade do som no terminal.
-            printf("Intensidade: %d\n", intensity);
+            botao_foi_pressionado = true;
         }
-
-        // Se botão não está pressionado desenha uma seta indicando para pressionar o botão.
-        if (gpio_get(BUTTON_A) == 1) {
+        
+        // Enquanto o botão não for pressionado, desenha a seta indicando para pressionar o botão.
+        if (gpio_get(BUTTON_A) == 1 && botao_foi_pressionado == false) {
+            draw_arrow();
+        } else {
             npClear();
-            
-            // npSetLED(2, 0, 0, 50);  
-            // npSetLED(6, 0, 0, 50);  
-            
-            // npSetLED(16, 0, 0, 50); 
-            // npSetLED(22, 0, 0, 50); 
-
-            
-            // npSetLED(10, 0, 0, 50); 
-            // npSetLED(11, 0, 0, 50);
-            // npSetLED(12, 0, 0, 50);
-            // npSetLED(13, 0, 0, 50);
-            // npSetLED(14, 0, 0, 50);
-
             npWrite();
         }
+        
+        if (gpio_get(BUTTON_A) == 1) {
+            if (botao_foi_pressionado == true) {
+                print_texto_scroll("Processando...", 0, 0, 1);
+                display_message = NULL; // Limpa a mensagem exibida
 
-        // Atualiza a rolagem do texto
-        if (display_message != NULL) {
-            joystick_read_axis(&vry_value); // Lê apenas o eixo Y
+                // limpa matriz de LEDs
+                npClear();
+                npWrite();
 
-            // Atualiza a rolagem vertical
-            if (vry_value > JOY_THRESHOLD_UP) { // joystick inclinado para cima
-                scroll_y += SCROLL_SPEED;
-            } else if (vry_value < JOY_THRESHOLD_DOWN) { // joystick inclinado para baixo
-                scroll_y -= SCROLL_SPEED;
+                // Envia a requisição HTTP
+                send_http_request();
+
+                // Marca que o botão foi pressionado
+                botao_foi_pressionado = false;
             }
 
-            // Desenha o display apenas se scroll_y mudou
-            if (scroll_y != prev_scroll_y) {
-                print_texto_scroll(display_message, 0, scroll_y, 1);
-                prev_scroll_y = scroll_y; // Atualiza o valor anterior de scroll_y
+            // Atualiza a rolagem do texto
+            if (display_message != NULL) {
+                joystick_read_axis(&vry_value); // Lê apenas o eixo Y
+
+                // Atualiza a rolagem vertical
+                if (vry_value > JOY_THRESHOLD_UP) { // joystick inclinado para cima
+                    scroll_y += SCROLL_SPEED;
+                } else if (vry_value < JOY_THRESHOLD_DOWN) { // joystick inclinado para baixo
+                    scroll_y -= SCROLL_SPEED;
+                }
+
+                // Desenha o display apenas se scroll_y mudou
+                if (scroll_y != prev_scroll_y) {
+                    print_texto_scroll(display_message, 0, scroll_y, 1);
+                    prev_scroll_y = scroll_y; // Atualiza o valor anterior de scroll_y
+                }
             }
         }
+        
     }
 
     cyw43_arch_deinit();
