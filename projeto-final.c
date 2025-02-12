@@ -53,6 +53,12 @@ int scroll_y = 0;
 // Variavel que irá indicar quando o botão foi pressionado para enviar a requisição HTTP
 bool botao_foi_pressionado = false;
 
+// Variável para indicar se a mensagem está sendo processada
+bool esta_processando = false;
+
+// Variável para indicar se a inicialização foi completada
+bool inicializacao_completa = false;
+
 // Parâmetros para definir os limiares e a velocidade do scroll
 #define JOY_THRESHOLD_UP    2500   // se ADC Y maior que este valor, rola para cima
 #define JOY_THRESHOLD_DOWN  1600   // se ADC Y menor que este valor, rola para baixo
@@ -128,6 +134,7 @@ static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
 
             // Marca que a mensagem foi recebida
             mensagem_recebida = true;
+            esta_processando = false;
 
             // Desenha notificação na matriz de LEDs
             draw_notification();
@@ -379,27 +386,11 @@ void draw_arrow() {
 void draw_notification() {
     npClear();
             
-    npSetLED(12, 0, 100, 0);  
-    npSetLED(7, 0, 100, 0);  
-    npSetLED(11, 0, 100, 0);  
-    npSetLED(13, 0, 100, 0);  
-    npSetLED(17, 0, 100, 0);  
     npSetLED(2, 0, 100, 0);  
-    npSetLED(6, 0, 100, 0);  
-    npSetLED(8, 0, 100, 0);  
-    npSetLED(10, 0, 100, 0);  
-    npSetLED(14, 0, 100, 0);  
-    npSetLED(16, 0, 100, 0);  
-    npSetLED(18, 0, 100, 0);  
+    npSetLED(12, 0, 100, 0);  
+    npSetLED(17, 0, 100, 0);  
     npSetLED(22, 0, 100, 0);  
-    npSetLED(1, 0, 100, 0);  
-    npSetLED(3, 0, 100, 0);  
-    npSetLED(5, 0, 100, 0);  
-    npSetLED(9, 0, 100, 0);  
-    npSetLED(15, 0, 100, 0);  
-    npSetLED(19, 0, 100, 0);  
-    npSetLED(21, 0, 100, 0);  
-    npSetLED(23, 0, 100, 0);  
+    
 
     npWrite();
 
@@ -439,15 +430,15 @@ int main() {
     init_display();
     init_joystick();
 
+    npClear();
+    npWrite();
+
     // Configuração do GPIO do Botão A como entrada com pull-up interno
     gpio_init(BUTTON_A);
     gpio_set_dir(BUTTON_A, GPIO_IN);
     gpio_pull_up(BUTTON_A);
 
-    print_texto_scroll("Inicializando BitDog AI", 0, 0, 1);
-
-    sleep_ms(10000);
-    printf("Iniciando requisição HTTP\n");
+    print_texto_scroll("Inicializando Assistente BitDog AI", 0, 0, 1);
 
     // Inicializa o Wi-Fi
     if (cyw43_arch_init()) {
@@ -502,6 +493,8 @@ int main() {
     printf("Amostragem de teste...\n");
     sample_mic();
     printf("Configurações completas!\n");
+
+    inicializacao_completa = true;
 
     print_texto_scroll("Pressione e segure o botao A para fazer uma pergunta", 0, 0, 1);
 
@@ -612,11 +605,8 @@ int main() {
         }
         
         // Enquanto o botão não for pressionado, desenha a seta indicando para pressionar o botão.
-        if (gpio_get(BUTTON_A) == 1 && botao_foi_pressionado == false) {
+        if (botao_foi_pressionado == false && esta_processando == false && inicializacao_completa == true) {
             draw_arrow();
-        } else {
-            npClear();
-            npWrite();
         }
         
         if (gpio_get(BUTTON_A) == 1) {
@@ -633,6 +623,7 @@ int main() {
 
                 // Marca que o botão foi pressionado
                 botao_foi_pressionado = false;
+                esta_processando = true;
             }
 
             // Atualiza a rolagem do texto
