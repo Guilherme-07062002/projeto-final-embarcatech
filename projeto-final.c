@@ -16,7 +16,7 @@
 #define WIFI_SSID "CAVALO_DE_TROIA"
 #define WIFI_PASS "81001693"
 
-#define HTTP_REQUEST "GET / HTTP/1.1\r\nHost: teste.guilherme762002.workers.dev\r\nUser-Agent: PicoClient/1.0\r\nAccept: */*\r\nConnection: close\r\nCache-Control: no-cache\r\n\r\n"
+#define POST_DATA "{\"message\": \"Porque o céu é azul?\"}"
 
 // Variavel que indica que a mensagem foi recebida
 bool mensagem_recebida = false;
@@ -158,7 +158,23 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
         printf("Erro ao conectar ao servidor: %d\n", err);
         return err;
     }
-    if (tcp_write(tpcb, HTTP_REQUEST, strlen(HTTP_REQUEST), TCP_WRITE_FLAG_COPY) != ERR_OK) {
+
+    // Construir a requisição HTTP dinamicamente
+    char http_request[512];
+    int post_data_length = strlen(POST_DATA);
+    snprintf(http_request, sizeof(http_request),
+             "POST /ai?senha=secret-bitdog HTTP/1.1\r\n"
+             "Host: bitdog-api.guilherme762002.workers.dev\r\n"
+             "User-Agent: PicoClient/1.0\r\n"
+             "Accept: */*\r\n"
+             "Content-Type: application/json\r\n"
+             "Content-Length: %d\r\n"
+             "Connection: close\r\n"
+             "Cache-Control: no-cache\r\n\r\n"
+             "%s",
+             post_data_length, POST_DATA);
+
+    if (tcp_write(tpcb, http_request, strlen(http_request), TCP_WRITE_FLAG_COPY) != ERR_OK) {
         printf("Erro ao enviar a requisição HTTP\n");
         return ERR_VAL;
     }
@@ -195,7 +211,7 @@ static void dns_callback(const char *name, const ip_addr_t *ipaddr, void *callba
 static void send_http_request(void) {
     response_length = 0;
     memset(response_buffer, 0, RESPONSE_BUFFER_SIZE);
-    err_t err = dns_gethostbyname("teste.guilherme762002.workers.dev", &server_ip, dns_callback, NULL);
+    err_t err = dns_gethostbyname("bitdog-api.guilherme762002.workers.dev", &server_ip, dns_callback, NULL);
     if (err == ERR_OK) {
         // Se o DNS já está em cache, conecta imediatamente.
         printf("DNS resolvido imediatamente: %s\n", ipaddr_ntoa(&server_ip));
