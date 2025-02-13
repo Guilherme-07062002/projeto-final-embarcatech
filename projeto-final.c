@@ -176,10 +176,6 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
         return err;
     }
 
-    // Declara apenas as variáveis que serão utilizadas
-    char http_request[2048];
-    char json_body[2048];
-
     // Guarde o valor atual de audio_index para calcular o total de bytes
     size_t captured_audio_bytes = audio_index * sizeof(uint16_t);
     size_t required_size = 4 * ((captured_audio_bytes + 2) / 3) + 1;
@@ -194,9 +190,30 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
     base64_encode((const uint8_t*)audio_buffer, captured_audio_bytes, encoded_audio, required_size);
     printf("Áudio codificado em base64: %s\n", encoded_audio);
 
+    // Calcula o tamanho necessário para json_body
+    size_t json_body_size = required_size + 10000; // 100 bytes adicionais para o restante do JSON
+    char *json_body = malloc(json_body_size);
+    if (!json_body) {
+        printf("Erro: memória insuficiente para o corpo JSON\n");
+        free(encoded_audio);
+        return ERR_MEM;
+    }
+
     // Monta o corpo JSON com o áudio codificado
-    snprintf(json_body, sizeof(json_body), "{\"audioBase64\": \"%s\"}", encoded_audio);
+    snprintf(json_body, json_body_size, "{\"audioBase64\": \"%s\"}", encoded_audio);
     int json_length = strlen(json_body);
+
+    printf("Corpo JSON: %s\n", json_body);
+    printf("Tamanho do JSON: %d\n", json_length);
+
+    // Declara o buffer para a requisição HTTP
+    char http_request[json_body_size + 10000]; // 200 bytes adicionais para o restante da requisição HTTP
+
+    // // json body de teste
+    // char json_body_teste[] = "{\"audioBase64\": \"U29ycnksIEkgY2Fubm90IGhlbHAgdG8gYmUgYSB0ZXN0IGJvZHk=\"}";
+
+    // // length do json body de teste
+    // int json_length_teste = strlen(json_body_teste);
 
     snprintf(http_request, sizeof(http_request),
              "POST /voice-to-text?senha=secret-bitdog HTTP/1.1\r\n"
@@ -205,19 +222,27 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
              "Accept: */*\r\n"
              "Content-Type: application/json\r\n"
              "Content-Length: %d\r\n"
+             "Accept-Encoding: gzip, deflate, br\r\n"
              "Connection: close\r\n\r\n"
              "%s",
              json_length, json_body);
 
+    printf("Requisição HTTP:\n%s\n", http_request);
+
     if (tcp_write(tpcb, http_request, strlen(http_request), TCP_WRITE_FLAG_COPY) != ERR_OK) {
         printf("Erro ao enviar a requisição HTTP\n");
         free(encoded_audio);
+        free(json_body);
         return ERR_VAL;
     }
     tcp_output(tpcb); // Envia imediatamente
     printf("Requisição HTTP enviada\n");
 
+    // Esvazia o buffer de áudio
+    audio_index = 0;
+    
     free(encoded_audio);
+    free(json_body);
     return ERR_OK;
 }
 
@@ -708,9 +733,6 @@ int main() {
                 // Marca que o botão foi pressionado
                 botao_foi_pressionado = false;
                 esta_processando = true;
-
-                // Esvazia o buffer de áudio
-                audio_index = 0;
             }
 
             // Atualiza a rolagem do texto
