@@ -22,6 +22,7 @@
 bool mensagem_recebida = false;
 
 #define BUTTON_A 5    // GPIO conectado ao Botão A
+#define BUTTON_B 6    // GPIO conectado ao Botão B
 
 // Pinos e módulo I2C
 #define I2C_PORT i2c1
@@ -173,6 +174,7 @@ static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
 static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) {
     if (err != ERR_OK) {
         printf("Erro ao conectar ao servidor: %d\n", err);
+        print_texto_scroll("Erro ao conectar ao servidor", 0, 0, 1);
         return err;
     }
 
@@ -183,6 +185,7 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
     // Aloca dinamicamente o buffer para o áudio codificado
     char *encoded_audio = malloc(required_size);
     if (!encoded_audio) {
+        print_texto_scroll("Erro: memoria insuficiente para a codificação base64", 0, 0, 1);
         printf("Erro: memória insuficiente para a codificação base64\n");
         return ERR_MEM;
     }
@@ -194,6 +197,7 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
     size_t json_body_size = required_size + 10000; // 100 bytes adicionais para o restante do JSON
     char *json_body = malloc(json_body_size);
     if (!json_body) {
+        print_texto_scroll("Erro: memoria insuficiente para o corpo JSON", 0, 0, 1);
         printf("Erro: memória insuficiente para o corpo JSON\n");
         free(encoded_audio);
         return ERR_MEM;
@@ -230,6 +234,7 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
     printf("Requisição HTTP:\n%s\n", http_request);
 
     if (tcp_write(tpcb, http_request, strlen(http_request), TCP_WRITE_FLAG_COPY) != ERR_OK) {
+        print_texto_scroll("Erro ao enviar a requisiçao HTTP", 0, 0, 1);
         printf("Erro ao enviar a requisição HTTP\n");
         free(encoded_audio);
         free(json_body);
@@ -252,6 +257,7 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
  */
 static void dns_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg) {
     if (ipaddr == NULL) {
+        print_texto_scroll("Erro ao resolver o endereço do servidor", 0, 0, 1);
         printf("Erro ao resolver o endereço do servidor\n");
         return;
     }
@@ -264,6 +270,7 @@ static void dns_callback(const char *name, const ip_addr_t *ipaddr, void *callba
     }
     tcp_recv(pcb, http_client_callback);
     if (tcp_connect(pcb, ipaddr, 80, tcp_connected_callback) != ERR_OK) {
+        print_texto_scroll("Erro ao conectar ao servidor", 0, 0, 1);
         printf("Erro ao conectar ao servidor\n");
         return;
     }
@@ -281,17 +288,20 @@ static void send_http_request(void) {
         printf("DNS resolvido imediatamente: %s\n", ipaddr_ntoa(&server_ip));
         struct tcp_pcb *pcb = tcp_new();
         if (!pcb) {
+            print_texto_scroll("Erro ao criar PCB", 0, 0, 1);
             printf("Erro ao criar PCB\n");
             return;
         }
         tcp_recv(pcb, http_client_callback);
         if (tcp_connect(pcb, &server_ip, 80, tcp_connected_callback) != ERR_OK) {
+            print_texto_scroll("Erro ao conectar ao servidor", 0, 0, 1);
             printf("Erro ao conectar ao servidor\n");
             return;
         }
     } else if (err == ERR_INPROGRESS) {
         printf("Resolução do DNS em andamento...\n");
     } else {
+        print_texto_scroll("Erro ao iniciar a resolucao do DNS", 0, 0, 1);
         printf("Erro ao iniciar a resolução do DNS\n");
     }
 }
@@ -413,25 +423,6 @@ float mic_power() {
     }
 
 /**
- * Desenha seta no display OLED indicando para pressionar o botão.
- */
-void draw_arrow() {
-    npClear();
-            
-    npSetLED(2, 0, 0, 100);  
-    npSetLED(6, 0, 0, 100);  
-    npSetLED(16, 0, 0, 100); 
-    npSetLED(22, 0, 0, 100); 
-    npSetLED(10, 0, 0, 100); 
-    npSetLED(11, 0, 0, 100);
-    npSetLED(12, 0, 0, 100);
-    npSetLED(13, 0, 0, 100);
-    npSetLED(14, 0, 0, 100);
-
-    npWrite();
-}
-
-/**
  * Desenha notificação quando mensagem é recebida.
  */
 void draw_notification() {
@@ -448,23 +439,6 @@ void draw_notification() {
     sleep_ms(500);
 
     npClear();
-    npWrite();
-}
-
-/**
- * Desenha sorriso na matriz de LEDs.
- */
-void draw_smile() {
-    npClear();
-            
-    npSetLED(16, 0, 100, 0);  
-    npSetLED(18, 0, 100, 0);  
-    npSetLED(14, 0, 100, 0);  
-    npSetLED(6, 0, 100, 0);  
-    npSetLED(7, 0, 100, 0);  
-    npSetLED(8, 0, 100, 0);  
-    npSetLED(11, 0, 100, 0);  
-
     npWrite();
 }
 
@@ -515,6 +489,199 @@ void base64_encode(const uint8_t *data, size_t input_length, char *encoded_data,
     encoded_data[output_length] = '\0';
 }
 
+// Pinos e módulo I2C
+#define I2C_PORT i2c1
+#define PINO_SCL 14
+#define PINO_SDA 15
+
+// Configuração do pino do buzzer
+#define BUZZER_PIN 21
+
+bool program_running = false; // Indica se um programa acionado pelo botão b está em execução
+
+// Variáveis de controle do menu
+uint pos_y = 12; // Variável de controle do menu
+
+/**
+ * Função para escrever texto no display
+ * 
+ * @param msg   Mensagem a ser exibida
+ * @param pos_x Posição X no display
+ * @param pos_y Posição Y no display
+ * @param scale Escala do texto
+ */
+void print_texto(char *msg, uint pos_x, uint pos_y, uint scale) {
+    ssd1306_draw_string(&disp, pos_x, pos_y, scale, msg);
+    ssd1306_show(&disp);
+}
+
+/**
+ * Desenha um retângulo (usado como seletor no menu)
+ * 
+ * @param x1 Coordenada X do canto superior esquerdo
+ * @param y1 Coordenada Y do canto superior esquerdo
+ * @param x2 Coordenada X do canto inferior direito
+ * @param y2 Coordenada Y do canto inferior direito
+ */
+void print_retangulo(int x1, int y1, int x2, int y2) {
+    ssd1306_draw_empty_square(&disp, x1, y1, x2, y2);
+    ssd1306_show(&disp);
+}
+
+// Desenha o menu na tela OLED
+void desenha_menu() {
+    ssd1306_clear(&disp);
+    print_texto("Selecione a pergunta", 6, 2, 1);
+
+    // O retângulo tem altura de 12 pixels a partir da posição pos_y
+    print_retangulo(2, pos_y, 120, 18);
+
+    print_texto("Ultimas noticias", 6, 18, 1.5);
+    print_texto("Cotacao do dolar", 6, 30, 1.5);
+    print_texto("Conte uma piada", 6, 42, 1.5);
+}
+
+/**
+ * Lê os valores dos eixos do joystick (X e Y)
+ * 
+ * @param vrx_value Ponteiro para armazenar o valor do eixo X
+ * @param vry_value Ponteiro para armazenar o valor do eixo Y
+ */
+void joystick_read_axis_menu_oled(uint16_t *vrx_value, uint16_t *vry_value) {
+    // Seleciona o canal ADC para o eixo X e lê o valor
+    adc_select_input(ADC_CHANNEL_0);
+    sleep_us(2);
+    *vrx_value = adc_read();
+
+    // Seleciona o canal ADC para o eixo Y e lê o valor
+    adc_select_input(ADC_CHANNEL_1);
+    sleep_us(2);
+    *vry_value = adc_read();
+}
+
+// Interrompe a execução do programa atual e retorna ao menu
+void stop_program() {
+    program_running = false;
+
+    // Desenha o menu novamente
+    desenha_menu();
+}
+
+ 
+/**
+ * Toca um tom no buzzer
+ * 
+ * @param pin         Pino do buzzer
+ * @param frequency   Frequência do tom em Hz
+ * @param duration_ms Duração do tom em milissegundos
+ */
+void play_tone(uint pin, uint frequency, uint duration_ms) {
+    if (frequency == 0) {
+        sleep_ms(duration_ms);
+        return;
+    }
+
+    uint slice = pwm_gpio_to_slice_num(pin);
+
+    // Define explicitamente o divisor do PWM para 16
+    pwm_set_clkdiv(slice, 16.0f);
+
+    uint32_t clock_freq = clock_get_hz(clk_sys);
+
+    // Calcula o valor de wrap para a frequência desejada
+    uint32_t top = (clock_freq / (frequency * 16)) - 1;
+
+    pwm_set_wrap(slice, top);
+
+    // Configura duty cycle em 50% usando o valor calculado para top
+    pwm_set_gpio_level(pin, top / 2);
+    pwm_set_enabled(slice, true);
+
+    sleep_ms(duration_ms);
+
+    // Interrompe o som após a duração
+    pwm_set_enabled(slice, false);
+}
+
+/**
+ * Função para exibir menu no display OLED
+ * 
+ * @return int Código de retorno
+ */
+int menu_oled() {
+    desenha_menu(); // Exibe o menu inicial
+
+    uint countdown = 0; // Para controle de histerese (movimento para baixo)
+    uint countup = 2;   // Para controle de histerese (movimento para cima)
+    uint last_pos_y = pos_y;
+
+    while (1) {
+        // Usa ADC (canal 0) para detectar o movimento do joystick no eixo Y
+        adc_select_input(0);
+        uint adc_y_raw = adc_read();
+        const uint bar_width = 40;
+        const uint adc_max = (1 << 12) - 1;
+        uint bar_y_pos = adc_y_raw * bar_width / adc_max;
+
+        // Ajusta a posição do seletor conforme a leitura do ADC
+        if (bar_y_pos < 15 && countdown < 2) {
+            pos_y += 12;
+            countdown++;
+            if (countup > 0) countup--;
+        } else if (bar_y_pos > 25 && countup < 2) {
+            pos_y -= 12;
+            countup++;
+            if (countdown > 0) countdown--;
+        }
+
+        // Atualiza o menu se a posição do seletor mudar e nenhum programa estiver em execução
+        if (pos_y != last_pos_y && !program_running) {
+            last_pos_y = pos_y;
+            desenha_menu();
+        }
+
+        sleep_ms(100);
+
+        // Se o botão A for pressionado, sai da função menu_oled
+        if (gpio_get(BUTTON_A) == 0) {
+            return 0;
+
+            // Aguarda liberação do botão para evitar múltiplas detecções
+            while (gpio_get(BUTTON_A) == 0) {
+                sleep_ms(10);
+            }
+        }
+
+        // Verifica se o botão do joystick foi pressionado
+        if (gpio_get(SW) == 0) {
+            if (program_running) {
+                // Se um programa estiver em execução, interrompe e volta ao menu
+                stop_program();
+            } else {
+                program_running = true;
+                switch (pos_y) {
+                    case 12:
+                        printf("Primeira opção selecionada\n");
+                        break;
+                    case 24:
+                        printf("Segunda opção selecionada\n");    
+                        break;
+                    case 36:
+                        printf("Terceira opção selecionada\n");
+                        break;
+                }
+            }
+            
+            // Aguarda liberação do botão para evitar múltiplas detecções
+            while (gpio_get(SW) == 0) {
+                sleep_ms(10);
+            }
+        }
+    }
+    return 0;
+}
+
+
 /**
  * Main.
  */
@@ -535,6 +702,11 @@ int main() {
     gpio_init(BUTTON_A);
     gpio_set_dir(BUTTON_A, GPIO_IN);
     gpio_pull_up(BUTTON_A);
+
+    // Configuração do GPIO do Botão B como entrada com pull-up interno
+    gpio_init(BUTTON_B);
+    gpio_set_dir(BUTTON_B, GPIO_IN);
+    gpio_pull_up(BUTTON_B);
 
     // Inicialização do buffer: zera o índice antes da gravação
     audio_index = 0;
@@ -597,7 +769,7 @@ int main() {
 
     inicializacao_completa = true;
 
-    print_texto_scroll("Pressione e segure o botao A para fazer uma pergunta", 0, 0, 1);
+    print_texto_scroll("Pressione e segure A para falar ou pressione B para escolher uma pergunta", 0, 0, 1);
 
     // Variáveis para leitura do joystick e cálculo dos offsets
     uint16_t vry_value = 0;
@@ -609,13 +781,13 @@ int main() {
         cyw43_arch_poll();  // Necessário para manter o Wi-Fi ativo
         sleep_ms(50);
 
-            // Se mensagem foi recebida, exibe
-            if (mensagem_recebida == true) {
-                print_texto_scroll(display_message, 0, 0, 1);
+        // Se mensagem foi recebida, exibe
+        if (mensagem_recebida == true) {
+            print_texto_scroll(display_message, 0, 0, 1);
 
-                // Marca que a mensagem foi exibida
-                mensagem_recebida = false;
-            }
+            // Marca que a mensagem foi exibida
+            mensagem_recebida = false;
+        }
 
         // Verifica se o botão está pressionado
         while (gpio_get(BUTTON_A) == 0) {
@@ -708,13 +880,12 @@ int main() {
             botao_foi_pressionado = true;
         }
         
-        // Enquanto o botão não for pressionado, desenha a seta indicando para pressionar o botão.
-        if (botao_foi_pressionado == false && esta_processando == false && inicializacao_completa == true) {
-            draw_arrow();
+        // Se botão B for pressionado, exibe o menu no display OLED
+        if (gpio_get(BUTTON_B) == 0) {
+            menu_oled();
         }
         
         if (gpio_get(BUTTON_A) == 1) {
-            
             if (botao_foi_pressionado == true) {
                 // Quando o botão for solto, a gravação está finalizada.
                 // Aqui, audio_index contém o número total de amostras gravadas.
