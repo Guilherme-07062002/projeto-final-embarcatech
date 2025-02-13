@@ -209,23 +209,37 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
     // Declara o buffer para a requisição HTTP
     char http_request[json_body_size + 10000]; // 200 bytes adicionais para o restante da requisição HTTP
 
-    // // json body de teste
-    // char json_body_teste[] = "{\"audioBase64\": \"U29ycnksIEkgY2Fubm90IGhlbHAgdG8gYmUgYSB0ZXN0IGJvZHk=\"}";
 
-    // // length do json body de teste
-    // int json_length_teste = strlen(json_body_teste);
+    // snprintf(http_request, sizeof(http_request),
+    //          "POST /voice-to-text?senha=secret-bitdog HTTP/1.1\r\n"
+    //          "Host: bitdog-api.guilherme762002.workers.dev\r\n"
+    //          "User-Agent: PicoClient/1.0\r\n"
+    //          "Accept: */*\r\n"
+    //          "Content-Type: application/json\r\n"
+    //          "Content-Length: %d\r\n"
+    //          "Accept-Encoding: gzip, deflate, br\r\n"
+    //          "Connection: close\r\n\r\n"
+    //          "%s",
+    //          json_length, json_body);
+
+     // json body de teste
+    char json_body_teste[] = "{\"message\": \"Porque o céu é azul?\"}";
+
+    // length do json body de teste
+    int json_length_teste = strlen(json_body_teste);
 
     snprintf(http_request, sizeof(http_request),
-             "POST /voice-to-text?senha=secret-bitdog HTTP/1.1\r\n"
+             "POST /ai?senha=secret-bitdog HTTP/1.1\r\n"
              "Host: bitdog-api.guilherme762002.workers.dev\r\n"
              "User-Agent: PicoClient/1.0\r\n"
              "Accept: */*\r\n"
              "Content-Type: application/json\r\n"
              "Content-Length: %d\r\n"
-             "Accept-Encoding: gzip, deflate, br\r\n"
-             "Connection: close\r\n\r\n"
+             "Connection: close\r\n"
+             "Cache-Control: no-cache\r\n\r\n"
              "%s",
-             json_length, json_body);
+             json_length_teste, json_body_teste);
+
 
     printf("Requisição HTTP:\n%s\n", http_request);
 
