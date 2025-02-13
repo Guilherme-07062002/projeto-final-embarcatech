@@ -21,6 +21,13 @@
 // Variavel que indica que a mensagem foi recebida
 bool mensagem_recebida = false;
 
+
+#define MAX_PERGUNTAS 3 // Número máximo de perguntas a serem recebidas
+#define MAX_PERGUNTA_LENGTH 100 // Tamanho máximo de cada pergunta
+
+// Array para armazenar as perguntas
+char perguntas[MAX_PERGUNTAS][MAX_PERGUNTA_LENGTH];
+
 #define BUTTON_A 5    // GPIO conectado ao Botão A
 #define BUTTON_B 6    // GPIO conectado ao Botão B
 
@@ -125,6 +132,20 @@ void print_texto_scroll(const char *msg, int offset_x, int offset_y, uint scale)
     ssd1306_show(&disp);
 }
 
+void trim(char *str) {
+    char *start = str;
+    // Remove espaços à esquerda
+    while (isspace((unsigned char)*start)) start++;
+    if (start != str) {
+        memmove(str, start, strlen(start) + 1);
+    }
+    // Remove espaços à direita
+    char *end = str + strlen(str) - 1;
+    while (end >= str && isspace((unsigned char)*end)) end--;
+    *(end + 1) = '\0';
+}
+
+
 /**
  * Callback para processar a resposta HTTP.
  */
@@ -138,19 +159,44 @@ static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
         // Procura o início do corpo da resposta (após o header)
         char *body = strstr(response_buffer, "\r\n\r\n");
         if (body) {
-            body += 4; // Pula as quebras de linha
-            printf("Corpo da resposta:\n%s\n", body);
-            // Armazena o corpo da resposta para que o loop principal o exiba com rolagem
-            display_message = body;
+            if (inicializacao_completa == true){
+                 // Copia a resposta para uma string temporária para não modificar a original
+                char temp[RESPONSE_BUFFER_SIZE];
+                strncpy(temp, body, RESPONSE_BUFFER_SIZE);
+                temp[RESPONSE_BUFFER_SIZE - 1] = '\0';
 
-            // Marca que a mensagem foi recebida
-            mensagem_recebida = true;
-            esta_processando = false;
+                // Usa strtok para separar as perguntas com base na vírgula
+                char *token = strtok(temp, ",");
+                int i = 0;
+                while (token != NULL && i < MAX_PERGUNTAS) {
+                    trim(token); // Remove espaços em branco
+                    strncpy(perguntas[i], token, MAX_PERGUNTA_LENGTH);
+                    perguntas[i][MAX_PERGUNTA_LENGTH - 1] = '\0'; // Garante que a string está terminada
+                    token = strtok(NULL, ",");
+                    i++;
+                }
 
-            // Desenha notificação na matriz de LEDs
-            draw_notification();
+                // Exibe as perguntas para verificação
+                for (int j = 0; j < i; j++) {
+                    printf("Pergunta %d: %s\n", j + 1, perguntas[j]);
+                }
 
-            printf("Mensagem recebida\n");
+                inicializacao_completa = false;
+            } else {
+                body += 4; // Pula as quebras de linha
+                printf("Corpo da resposta:\n%s\n", body);
+                // Armazena o corpo da resposta para que o loop principal o exiba com rolagem
+                display_message = body;
+    
+                // Marca que a mensagem foi recebida
+                mensagem_recebida = true;
+                esta_processando = false;
+    
+                // Desenha notificação na matriz de LEDs
+                draw_notification();
+    
+                printf("Mensagem recebida\n");
+            }
         } else {
             printf("Corpo da resposta não encontrado\n");
         }
@@ -184,8 +230,44 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
         return err;
     }
 
+    // Verifica se foi realizada a inicialização completa
+    if (inicializacao_completa == true){
+        // Declara o buffer para a requisição HTTP
+        char http_request[1000]; // 1000 bytes adicionais para o restante da requisição HTTP
+
+        // Monta o corpo JSON com a pergunta escolhida
+        char json_body[1000];
+        
+        snprintf(json_body, sizeof(json_body), "{\"message\": \"Forneça-me apenas 3 exemplos de perguntas sobre conhecimentos gerais, separadas por vírgula. Elas serão exibidas em um display OLED. Me retorne apenas o texto com as 3 perguntas. Exemplo: 'Qual e a capital da Franca,Quem e o autor de A Odiseia,Qual e o planeta mais distante do Sol'\"}");
+        
+        int json_length = strlen(json_body);
+
+        printf("Corpo JSON: %s\n", json_body);
+
+        snprintf(http_request, sizeof(http_request),
+                "POST /ai?senha=secret-bitdog HTTP/1.1\r\n"
+                "Host: bitdog-api.guilherme762002.workers.dev\r\n"
+                "User-Agent: PicoClient/1.0\r\n"
+                "Accept: */*\r\n"
+                "Content-Type: application/json\r\n"
+                "Content-Length: %d\r\n"
+                "Connection: close\r\n"
+                "Cache-Control: no-cache\r\n\r\n"
+                "%s",
+                json_length, json_body);
+        
+        printf("Requisição HTTP:\n%s\n", http_request);
+
+        if (tcp_write(tpcb, http_request, strlen(http_request), TCP_WRITE_FLAG_COPY) != ERR_OK) {
+            print_texto_scroll("Erro ao enviar a requisiçao HTTP", 0, 0, 1);
+            printf("Erro ao enviar a requisição HTTP\n");
+            
+            return ERR_VAL;
+        }
+        tcp_output(tpcb); // Envia imediatamente
+        printf("Requisição HTTP enviada\n");
+    } else if (botao_b_foi_pressionado == false){
     // Se botão B não foi pressionado, envia a requisição HTTP contendo o áudio
-    if (botao_b_foi_pressionado == false){
         // Guarde o valor atual de audio_index para calcular o total de bytes
         size_t captured_audio_bytes = audio_index * sizeof(uint16_t);
         size_t required_size = 4 * ((captured_audio_bytes + 2) / 3) + 1;
@@ -257,7 +339,7 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
                 
         free(encoded_audio);
         free(json_body);
-    } else {
+    } else if (botao_b_foi_pressionado == true){
         // Declara o buffer para a requisição HTTP
         char http_request[1000]; // 1000 bytes adicionais para o restante da requisição HTTP
 
@@ -269,15 +351,15 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
         {
             case 12:
                 printf("Montando json_body para a pergunta 12\n");
-                snprintf(json_body, sizeof(json_body), "{\"message\": \"O que é um buraco negro?\"}");
+                snprintf(json_body, sizeof(json_body), "{\"message\": \"%s\"}", perguntas[0]);
                 break;
             case 24:
                 printf("Montando json_body para a pergunta 24\n");
-                snprintf(json_body, sizeof(json_body), "{\"message\": \"Quem inventou a lâmpada?\"}");
+                snprintf(json_body, sizeof(json_body), "{\"message\": \"%s\"}", perguntas[1]);
                 break;
             case 36:
                 printf("Montando json_body para a pergunta 36\n");
-                snprintf(json_body, sizeof(json_body), "{\"message\": \"Me conte uma piada, trazendo junto a resposta caso houver\"}");
+                snprintf(json_body, sizeof(json_body), "{\"message\": \"%s\"}", perguntas[2]);
                 break;
             default:
                 break;  
@@ -601,9 +683,13 @@ void desenha_menu() {
     // O retângulo tem altura de 12 pixels a partir da posição pos_y
     print_retangulo(2, pos_y, 120, 18);
 
-    print_texto("Buracos negros", 6, 18, 1.5);
-    print_texto("Inventor da lampada", 6, 30, 1.5);
-    print_texto("Conte uma piada", 6, 42, 1.5);
+    // Verifica se as perguntas foram recebidas
+    if (strlen(perguntas[0]) > 0 && strlen(perguntas[1]) > 0 && strlen(perguntas[2]) > 0) {
+        // Exibe as perguntas recebidas
+        print_texto(perguntas[0], 6, 18, 1.5);
+        print_texto(perguntas[1], 6, 30, 1.5);
+        print_texto(perguntas[2], 6, 42, 1.5);
+    }
 }
 
 /**
@@ -859,6 +945,9 @@ int main() {
     printf("Configurações completas!\n");
 
     inicializacao_completa = true;
+
+    // Envia requisição HTTP para obter as perguntas
+    send_http_request();
 
     print_texto_scroll("Pressione e segure A para falar ou pressione B para escolher uma pergunta", 0, 0, 1);
 
