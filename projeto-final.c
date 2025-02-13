@@ -54,6 +54,12 @@ int scroll_y = 0;
 // Variavel que irá indicar quando o botão foi pressionado para enviar a requisição HTTP
 bool botao_foi_pressionado = false;
 
+// Variavel que irá indicar se botão B foi pressionado para quando enviar requisição HTTP enviar pergunta escolhida
+bool botao_b_foi_pressionado = false;
+
+// Variável para indicar qual pergunta foi selecionada
+int pergunta_selecionada = 0;
+
 // Variável para indicar se a mensagem está sendo processada
 bool esta_processando = false;
 
@@ -178,76 +184,135 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
         return err;
     }
 
-    // Guarde o valor atual de audio_index para calcular o total de bytes
-    size_t captured_audio_bytes = audio_index * sizeof(uint16_t);
-    size_t required_size = 4 * ((captured_audio_bytes + 2) / 3) + 1;
+    // Se botão B não foi pressionado, envia a requisição HTTP contendo o áudio
+    if (botao_b_foi_pressionado == false){
+        // Guarde o valor atual de audio_index para calcular o total de bytes
+        size_t captured_audio_bytes = audio_index * sizeof(uint16_t);
+        size_t required_size = 4 * ((captured_audio_bytes + 2) / 3) + 1;
 
-    // Aloca dinamicamente o buffer para o áudio codificado
-    char *encoded_audio = malloc(required_size);
-    if (!encoded_audio) {
-        print_texto_scroll("Erro: memoria insuficiente para a codificação base64", 0, 0, 1);
-        printf("Erro: memória insuficiente para a codificação base64\n");
-        return ERR_MEM;
-    }
+        // Aloca dinamicamente o buffer para o áudio codificado
+        char *encoded_audio = malloc(required_size);
+        if (!encoded_audio) {
+            print_texto_scroll("Erro: memoria insuficiente para a codificação base64", 0, 0, 1);
+            printf("Erro: memória insuficiente para a codificação base64\n");
+            return ERR_MEM;
+        }
 
-    base64_encode((const uint8_t*)audio_buffer, captured_audio_bytes, encoded_audio, required_size);
-    printf("Áudio codificado em base64: %s\n", encoded_audio);
+        base64_encode((const uint8_t*)audio_buffer, captured_audio_bytes, encoded_audio, required_size);
+        printf("Áudio codificado em base64: %s\n", encoded_audio);
 
-    // Calcula o tamanho necessário para json_body
-    size_t json_body_size = required_size + 10000; // 100 bytes adicionais para o restante do JSON
-    char *json_body = malloc(json_body_size);
-    if (!json_body) {
-        print_texto_scroll("Erro: memoria insuficiente para o corpo JSON", 0, 0, 1);
-        printf("Erro: memória insuficiente para o corpo JSON\n");
-        free(encoded_audio);
-        return ERR_MEM;
-    }
+        // Calcula o tamanho necessário para json_body
+        size_t json_body_size = required_size + 100; // 100 bytes adicionais para o restante do JSON
+        char *json_body = malloc(json_body_size);
+        if (!json_body) {
+            print_texto_scroll("Erro: memoria insuficiente para o corpo JSON", 0, 0, 1);
+            printf("Erro: memória insuficiente para o corpo JSON\n");
+            free(encoded_audio);
+            return ERR_MEM;
+        }
 
-    // Monta o corpo JSON com o áudio codificado
-    snprintf(json_body, json_body_size, "{\"audioBase64\": \"%s\"}", encoded_audio);
-    int json_length = strlen(json_body);
+        // Monta o corpo JSON com o áudio codificado
+        snprintf(json_body, json_body_size, "{\"audioBase64\": \"%s\"}", encoded_audio);
+        int json_length = strlen(json_body);
 
-    printf("Corpo JSON: %s\n", json_body);
-    printf("Tamanho do JSON: %d\n", json_length);
+        printf("Corpo JSON: %s\n", json_body);
+        printf("Tamanho do JSON: %d\n", json_length);
 
-    // Declara o buffer para a requisição HTTP
-    char http_request[json_body_size + 10000]; // 200 bytes adicionais para o restante da requisição HTTP
+        // Declara o buffer para a requisição HTTP
+        char http_request[json_body_size + 200]; // 200 bytes adicionais para o restante da requisição HTTP
 
-    // // json body de teste
-    // char json_body_teste[] = "{\"audioBase64\": \"U29ycnksIEkgY2Fubm90IGhlbHAgdG8gYmUgYSB0ZXN0IGJvZHk=\"}";
+        // // json body de teste
+        // char json_body_teste[] = "{\"audioBase64\": \"U29ycnksIEkgY2Fubm90IGhlbHAgdG8gYmUgYSB0ZXN0IGJvZHk=\"}";
 
-    // // length do json body de teste
-    // int json_length_teste = strlen(json_body_teste);
+        // // length do json body de teste
+        // int json_length_teste = strlen(json_body_teste);
 
-    snprintf(http_request, sizeof(http_request),
-             "POST /voice-to-text?senha=secret-bitdog HTTP/1.1\r\n"
-             "Host: bitdog-api.guilherme762002.workers.dev\r\n"
-             "User-Agent: PicoClient/1.0\r\n"
-             "Accept: */*\r\n"
-             "Content-Type: application/json\r\n"
-             "Content-Length: %d\r\n"
-             "Accept-Encoding: gzip, deflate, br\r\n"
-             "Connection: close\r\n\r\n"
-             "%s",
-             json_length, json_body);
+        snprintf(http_request, sizeof(http_request),
+                "POST /voice-to-text?senha=secret-bitdog HTTP/1.1\r\n"
+                "Host: bitdog-api.guilherme762002.workers.dev\r\n"
+                "User-Agent: PicoClient/1.0\r\n"
+                "Accept: */*\r\n"
+                "Content-Type: application/json\r\n"
+                "Content-Length: %d\r\n"
+                "Accept-Encoding: gzip, deflate, br\r\n"
+                "Connection: close\r\n"
+                "Cache-Control: no-cache\r\n\r\n"
+                "%s",
+                json_length, json_body);
 
-    printf("Requisição HTTP:\n%s\n", http_request);
+        printf("Requisição HTTP:\n%s\n", http_request);
 
-    if (tcp_write(tpcb, http_request, strlen(http_request), TCP_WRITE_FLAG_COPY) != ERR_OK) {
-        print_texto_scroll("Erro ao enviar a requisiçao HTTP", 0, 0, 1);
-        printf("Erro ao enviar a requisição HTTP\n");
+        if (tcp_write(tpcb, http_request, strlen(http_request), TCP_WRITE_FLAG_COPY) != ERR_OK) {
+            print_texto_scroll("Erro ao enviar a requisiçao HTTP", 0, 0, 1);
+            printf("Erro ao enviar a requisição HTTP\n");
+            free(encoded_audio);
+            free(json_body);
+            return ERR_VAL;
+        }
+        tcp_output(tpcb); // Envia imediatamente
+        printf("Requisição HTTP enviada\n");
+            
+        // Esvazia o buffer de áudio
+        audio_index = 0;
+                
         free(encoded_audio);
         free(json_body);
-        return ERR_VAL;
-    }
-    tcp_output(tpcb); // Envia imediatamente
-    printf("Requisição HTTP enviada\n");
+    } else {
+        // Declara o buffer para a requisição HTTP
+        char http_request[1000]; // 1000 bytes adicionais para o restante da requisição HTTP
 
-    // Esvazia o buffer de áudio
-    audio_index = 0;
+        // Monta o corpo JSON com a pergunta escolhida
+        char json_body[1000];
+
+        // Switch case para montar o json_body de acordo com a pergunta escolhida
+        switch (pergunta_selecionada)
+        {
+            case 12:
+                printf("Montando json_body para a pergunta 12\n");
+                snprintf(json_body, sizeof(json_body), "{\"message\": \"O que é um buraco negro?\"}");
+                break;
+            case 24:
+                printf("Montando json_body para a pergunta 24\n");
+                snprintf(json_body, sizeof(json_body), "{\"message\": \"Quem inventou a lâmpada?\"}");
+                break;
+            case 36:
+                printf("Montando json_body para a pergunta 36\n");
+                snprintf(json_body, sizeof(json_body), "{\"message\": \"Me conte uma piada, trazendo junto a resposta caso houver\"}");
+                break;
+            default:
+                break;  
+        }
+        
+        int json_length = strlen(json_body);
+
+        printf("Corpo JSON: %s\n", json_body);
+
+        snprintf(http_request, sizeof(http_request),
+                "POST /ai?senha=secret-bitdog HTTP/1.1\r\n"
+                "Host: bitdog-api.guilherme762002.workers.dev\r\n"
+                "User-Agent: PicoClient/1.0\r\n"
+                "Accept: */*\r\n"
+                "Content-Type: application/json\r\n"
+                "Content-Length: %d\r\n"
+                "Connection: close\r\n"
+                "Cache-Control: no-cache\r\n\r\n"
+                "%s",
+                json_length, json_body);
+        
+        printf("Requisição HTTP:\n%s\n", http_request);
+
+        if (tcp_write(tpcb, http_request, strlen(http_request), TCP_WRITE_FLAG_COPY) != ERR_OK) {
+            print_texto_scroll("Erro ao enviar a requisiçao HTTP", 0, 0, 1);
+            printf("Erro ao enviar a requisição HTTP\n");
+            
+            return ERR_VAL;
+        }
+        tcp_output(tpcb); // Envia imediatamente
+        printf("Requisição HTTP enviada\n");
+                
+        pergunta_selecionada = 0;
+    }
     
-    free(encoded_audio);
-    free(json_body);
     return ERR_OK;
 }
 
@@ -536,8 +601,8 @@ void desenha_menu() {
     // O retângulo tem altura de 12 pixels a partir da posição pos_y
     print_retangulo(2, pos_y, 120, 18);
 
-    print_texto("Ultimas noticias", 6, 18, 1.5);
-    print_texto("Cotacao do dolar", 6, 30, 1.5);
+    print_texto("Buracos negros", 6, 18, 1.5);
+    print_texto("Inventor da lampada", 6, 30, 1.5);
     print_texto("Conte uma piada", 6, 42, 1.5);
 }
 
@@ -652,22 +717,48 @@ int menu_oled() {
             }
         }
 
+        // Se mensagem foi recebida, exibe
+        if (mensagem_recebida == true) {
+            print_texto_scroll(display_message, 0, 0, 1);
+
+            // Marca que a mensagem foi exibida
+            mensagem_recebida = false;
+        }
+
         // Verifica se o botão do joystick foi pressionado
         if (gpio_get(SW) == 0) {
             if (program_running) {
-                // Se um programa estiver em execução, interrompe e volta ao menu
+                // Se alguma mensagem estiver sendo exibida, interrompe a exibição e volta ao menu
                 stop_program();
             } else {
                 program_running = true;
                 switch (pos_y) {
                     case 12:
                         printf("Primeira opção selecionada\n");
+                        pergunta_selecionada = 12;
+
+                        // Envia requisição HTTP
+                        send_http_request();
+
+                        print_texto_scroll("Processando...", 0, 0, 1);
                         break;
                     case 24:
                         printf("Segunda opção selecionada\n");    
+                        pergunta_selecionada = 24;
+
+                        // Envia requisição HTTP 
+                        send_http_request();
+
+                        print_texto_scroll("Processando...", 0, 0, 1);
                         break;
                     case 36:
                         printf("Terceira opção selecionada\n");
+                        pergunta_selecionada = 36;
+
+                        // Envia requisição HTTP
+                        send_http_request();
+
+                        print_texto_scroll("Processando...", 0, 0, 1);
                         break;
                 }
             }
@@ -882,6 +973,7 @@ int main() {
         
         // Se botão B for pressionado, exibe o menu no display OLED
         if (gpio_get(BUTTON_B) == 0) {
+            botao_b_foi_pressionado = true;
             menu_oled();
         }
         
