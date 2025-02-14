@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include "hardware/adc.h"
 #include "hardware/dma.h"
+#include "hardware/clocks.h"
+#include "hardware/pwm.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -20,13 +22,13 @@ extern uint16_t audio_buffer[MAX_AUDIO_SAMPLES]; // Buffer para armazenar as amo
 // Parâmetros e macros do ADC.
 #define ADC_CLOCK_DIV 96.f
 #define SAMPLES 200 // Número de amostras que serão feitas do ADC.
-#define ADC_ADJUST(x) (x * 3.3f / (1 << 12u) - 1.65f) // Ajuste do valor do ADC para Volts.
+#define ADC_ADJUST(x) (x * 3.3f / (1 << 12u) - 1.65f)
 #define ADC_MAX 3.3f // Valor máximo do ADC.
 #define ADC_STEP (3.3f/5.f) // Intervalos de volume do microfone.
 extern uint16_t adc_buffer[SAMPLES]; // Buffer de amostras do ADC.
 
 // Canal e configurações do DMA
-extern int dma_channel; // Canal DMA
+extern uint dma_channel; // Canal DMA
 extern dma_channel_config dma_cfg; // Configuração do canal DMA
 
 // Protótipos de funções

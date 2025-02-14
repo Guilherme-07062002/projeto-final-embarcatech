@@ -1,5 +1,5 @@
 #include "neopixel.h"
-#include "ws2818b.pio.h" // Certifique-se que este path esteja correto
+#include "ws2818b.pio.h"
 
 // Variáveis para uso da máquina PIO.
 static npLED_t *leds;

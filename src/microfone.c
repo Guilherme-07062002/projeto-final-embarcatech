@@ -4,7 +4,7 @@ volatile int audio_index = 0; // Índice atual no buffer de áudio
 uint16_t audio_buffer[MAX_AUDIO_SAMPLES]; // Buffer para armazenar as amostras do microfone
 uint16_t adc_buffer[SAMPLES]; // Buffer de amostras do ADC.
 
-int dma_channel; // Canal DMA
+uint dma_channel; // Canal DMA
 dma_channel_config dma_cfg; // Configuração do canal DMA
 
 /**
