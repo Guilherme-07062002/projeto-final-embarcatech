@@ -88,9 +88,6 @@ volatile int audio_index = 0;
 void clear_display() {
     ssd1306_clear(&disp);
     ssd1306_show(&disp);
-
-    npClear();
-    npWrite();
 }
 
 /**
@@ -182,6 +179,7 @@ static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
                 }
 
                 inicializacao_completa = false;
+                draw_smile();
                 print_texto_scroll("Pressione e segure A para falar ou pressione B para escolher uma pergunta", 0, 0, 1);
             } else {
                 body += 4; // Pula as quebras de linha
@@ -195,6 +193,9 @@ static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
     
                 // Desenha notificação na matriz de LEDs
                 draw_notification();
+
+                // Desenha sorriso na matriz de LEDs novamente
+                draw_smile();
     
                 printf("Mensagem recebida\n");
             }
@@ -260,7 +261,10 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
         printf("Requisição HTTP:\n%s\n", http_request);
 
         if (tcp_write(tpcb, http_request, strlen(http_request), TCP_WRITE_FLAG_COPY) != ERR_OK) {
-            print_texto_scroll("Erro ao enviar a requisiçao HTTP", 0, 0, 1);
+            draw_notification();
+            npClear();
+            npWrite();
+            print_texto_scroll("Erro ao enviar a requisicao HTTP devido a limitacao da placa BitDogLab", 0, 0, 1);
             printf("Erro ao enviar a requisição HTTP\n");
             
             return ERR_VAL;
@@ -326,7 +330,10 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
         printf("Requisição HTTP:\n%s\n", http_request);
 
         if (tcp_write(tpcb, http_request, strlen(http_request), TCP_WRITE_FLAG_COPY) != ERR_OK) {
-            print_texto_scroll("Erro ao enviar a requisiçao HTTP", 0, 0, 1);
+            draw_notification();
+            npClear();
+            npWrite();
+            print_texto_scroll("Erro ao enviar a requisicao HTTP devido a limitacao da placa BitDogLab", 0, 0, 1);
             printf("Erro ao enviar a requisição HTTP\n");
             free(encoded_audio);
             free(json_body);
@@ -385,7 +392,10 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
         printf("Requisição HTTP:\n%s\n", http_request);
 
         if (tcp_write(tpcb, http_request, strlen(http_request), TCP_WRITE_FLAG_COPY) != ERR_OK) {
-            print_texto_scroll("Erro ao enviar a requisiçao HTTP", 0, 0, 1);
+            draw_notification();
+            npClear();
+            npWrite();
+            print_texto_scroll("Erro ao enviar a requisicao HTTP devido a limitacao da placa BitDogLab", 0, 0, 1);
             printf("Erro ao enviar a requisição HTTP\n");
             
             return ERR_VAL;
@@ -594,19 +604,12 @@ void draw_notification() {
     npSetLED(17, 0, 100, 0);  
     npSetLED(22, 0, 100, 0);  
 
-
-    // Inicializar buzzer
-    pwm_init_buzzer(BUZZER_PIN);
-
     // Emitir notificação
     beep(BUZZER_PIN, 100); // Bipe de 500ms
 
     npWrite();
 
     sleep_ms(500);
-
-    npClear();
-    npWrite();
 }
 
 // Função para capturar e armazenar um bloco de amostras
@@ -770,6 +773,26 @@ void beep(uint pin, uint duration_ms) {
 }
 
 /**
+ * Função para desenhar sorriso na matriz de leds
+ */
+void draw_smile() {
+    npClear();
+
+    // Olhos
+    npSetLED(16, 0, 100, 0);
+    npSetLED(18, 0, 100, 0);
+
+    // Boca
+    npSetLED(14, 0, 100, 0);
+    npSetLED(10, 0, 100, 0);
+    npSetLED(6, 0, 100, 0);
+    npSetLED(7, 0, 100, 0);
+    npSetLED(8, 0, 100, 0);
+
+    npWrite();
+}
+
+/**
  * Função para exibir menu no display OLED
  * 
  * @return int Código de retorno
@@ -908,12 +931,12 @@ int main() {
     // Inicializa ADC para leitura do joystick
     adc_init();
 
+    // Inicializar buzzer
+    pwm_init_buzzer(BUZZER_PIN);
+
     // Inicializa o display OLED e o joystick
     init_display();
     init_joystick();
-
-    npClear();
-    npWrite();
 
     // Configuração do GPIO do Botão A como entrada com pull-up interno
     gpio_init(BUTTON_A);
@@ -938,6 +961,7 @@ int main() {
     cyw43_arch_enable_sta_mode();
     printf("Conectando ao Wi-Fi...\n");
     if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASS, CYW43_AUTH_WPA2_AES_PSK, 10000)) {
+        print_texto_scroll("Falha ao conectar ao Wi-Fi", 0, 0, 1);
         printf("Falha ao conectar ao Wi-Fi\n");
         return 1;
     } else {
@@ -1104,7 +1128,7 @@ int main() {
             menu_oled();
         }
         
-        if (gpio_get(BUTTON_A) == 1) {
+        if (gpio_get(BUTTON_A) == 1) {            
             if (botao_foi_pressionado == true) {
                 // Quando o botão for solto, a gravação está finalizada.
                 // Aqui, audio_index contém o número total de amostras gravadas.
