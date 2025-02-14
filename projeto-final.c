@@ -228,6 +228,7 @@ static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
 
                 inicializacao_completa = false;
                 draw_smile();
+                beep(BUZZER_PIN, 100); // Bipe de 100ms
                 print_texto_scroll("Pressione e segure A para falar ou pressione B para escolher uma pergunta", 0, 0, 1);
             } else {
                 body += 4; // Pula as quebras de linha
