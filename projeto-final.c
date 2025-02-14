@@ -66,7 +66,6 @@ int main() {
 
     // Preparação do ADC.
     adc_gpio_init(MIC_PIN);
-    adc_init();
 
     // Configuração do ADC.
     adc_select_input(MIC_CHANNEL);
@@ -125,82 +124,8 @@ int main() {
             // Realiza uma amostragem do microfone.
             sample_mic();
 
-            // Pega a potência média da amostragem do microfone.
-            float avg = mic_power();
-            avg = 2.f * abs(ADC_ADJUST(avg)); // Ajusta para intervalo de 0 a 3.3V. (apenas magnitude, sem sinal)
-
-            uint intensity = get_intensity(avg); // Calcula intensidade a ser mostrada na matriz de LEDs.
-
             // Limpa a matriz de LEDs.
             npClear();
-
-            // A depender da intensidade do som, acende LEDs específicos com cores diferentes
-            switch (intensity) {
-                case 0: break; // Se o som for muito baixo, não acende nada.
-                case 1:
-                npSetLED(12, 0, 0, 80); // Acende apenas o centro.
-                break;
-                case 2:
-                npSetLED(12, 0, 0, 120); // Acente o centro.
-        
-                // Primeiro anel.
-                npSetLED(7, 0, 0, 80);
-                npSetLED(11, 0, 0, 80);
-                npSetLED(13, 0, 0, 80);
-                npSetLED(17, 0, 0, 80);
-                break;
-                case 3:
-                // Centro.
-                npSetLED(12, 60, 60, 0);
-        
-                // Primeiro anel.
-                npSetLED(7, 0, 0, 120);
-                npSetLED(11, 0, 0, 120);
-                npSetLED(13, 0, 0, 120);
-                npSetLED(17, 0, 0, 120);
-        
-                // Segundo anel.
-                npSetLED(2, 0, 0, 80);
-                npSetLED(6, 0, 0, 80);
-                npSetLED(8, 0, 0, 80);
-                npSetLED(10, 0, 0, 80);
-                npSetLED(14, 0, 0, 80);
-                npSetLED(16, 0, 0, 80);
-                npSetLED(18, 0, 0, 80);
-                npSetLED(22, 0, 0, 80);
-                break;
-                case 4:
-                // Centro.
-                npSetLED(12, 80, 0, 0);
-        
-                // Primeiro anel.
-                npSetLED(7, 60, 60, 0);
-                npSetLED(11, 60, 60, 0);
-                npSetLED(13, 60, 60, 0);
-                npSetLED(17, 60, 60, 0);
-        
-                // Segundo anel.
-                npSetLED(2, 0, 0, 120);
-                npSetLED(6, 0, 0, 120);
-                npSetLED(8, 0, 0, 120);
-                npSetLED(10, 0, 0, 120);
-                npSetLED(14, 0, 0, 120);
-                npSetLED(16, 0, 0, 120);
-                npSetLED(18, 0, 0, 120);
-                npSetLED(22, 0, 0, 120);
-        
-                // Terceiro anel.
-                npSetLED(1, 0, 0, 80);
-                npSetLED(3, 0, 0, 80);
-                npSetLED(5, 0, 0, 80);
-                npSetLED(9, 0, 0, 80);
-                npSetLED(15, 0, 0, 80);
-                npSetLED(19, 0, 0, 80);
-                npSetLED(21, 0, 0, 80);
-                npSetLED(23, 0, 0, 80);
-                break;
-            }
-            // Atualiza a matriz.
             npWrite();
 
             botao_foi_pressionado = true;

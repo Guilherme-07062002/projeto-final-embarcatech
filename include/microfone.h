@@ -33,8 +33,6 @@ extern dma_channel_config dma_cfg; // Configuração do canal DMA
 
 // Protótipos de funções
 void sample_mic();
-float mic_power();
-uint8_t get_intensity(float v);
 void capture_audio_block();
 
 #endif // MICROFONE_H
