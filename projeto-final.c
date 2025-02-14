@@ -507,6 +507,19 @@ void init_joystick(){
 
 #define abs(x) ((x < 0) ? (-x) : (x))
 
+// Pinos e módulo I2C
+#define I2C_PORT i2c1
+#define PINO_SCL 14
+#define PINO_SDA 15
+
+// Configuração do pino do buzzer
+#define BUZZER_PIN 21
+
+bool program_running = false; // Indica se um programa acionado pelo botão b está em execução
+
+// Variáveis de controle do menu
+uint pos_y = 12; // Variável de controle do menu
+
 // Canal e configurações do DMA
 uint dma_channel;
 dma_channel_config dma_cfg;
@@ -580,7 +593,13 @@ void draw_notification() {
     npSetLED(12, 0, 100, 0);  
     npSetLED(17, 0, 100, 0);  
     npSetLED(22, 0, 100, 0);  
-    
+
+
+    // Inicializar buzzer
+    pwm_init_buzzer(BUZZER_PIN);
+
+    // Emitir notificação
+    beep(BUZZER_PIN, 100); // Bipe de 500ms
 
     npWrite();
 
@@ -636,19 +655,6 @@ void base64_encode(const uint8_t *data, size_t input_length, char *encoded_data,
     }
     encoded_data[output_length] = '\0';
 }
-
-// Pinos e módulo I2C
-#define I2C_PORT i2c1
-#define PINO_SCL 14
-#define PINO_SDA 15
-
-// Configuração do pino do buzzer
-#define BUZZER_PIN 21
-
-bool program_running = false; // Indica se um programa acionado pelo botão b está em execução
-
-// Variáveis de controle do menu
-uint pos_y = 12; // Variável de controle do menu
 
 /**
  * Função para escrever texto no display
@@ -722,40 +728,45 @@ void stop_program() {
     desenha_menu();
 }
 
+// Configuração da frequência do buzzer (em Hz)
+#define BUZZER_FREQUENCY 100
+
+// Definição de uma função para inicializar o PWM no pino do buzzer
+void pwm_init_buzzer(uint pin) {
+    // Configurar o pino como saída de PWM
+    gpio_set_function(pin, GPIO_FUNC_PWM);
+
+    // Obter o slice do PWM associado ao pino
+    uint slice_num = pwm_gpio_to_slice_num(pin);
+
+    // Configurar o PWM com frequência desejada
+    pwm_config config = pwm_get_default_config();
+    pwm_config_set_clkdiv(&config, clock_get_hz(clk_sys) / (BUZZER_FREQUENCY * 4096)); // Divisor de clock
+    pwm_init(slice_num, &config, true);
+
+    // Iniciar o PWM no nível baixo
+    pwm_set_gpio_level(pin, 0);
+}
+
  
-/**
- * Toca um tom no buzzer
- * 
- * @param pin         Pino do buzzer
- * @param frequency   Frequência do tom em Hz
- * @param duration_ms Duração do tom em milissegundos
+/** 
+ * Função para reproduzir um beep no buzzer
  */
-void play_tone(uint pin, uint frequency, uint duration_ms) {
-    if (frequency == 0) {
-        sleep_ms(duration_ms);
-        return;
-    }
+void beep(uint pin, uint duration_ms) {
+    // Obter o slice do PWM associado ao pino
+    uint slice_num = pwm_gpio_to_slice_num(pin);
 
-    uint slice = pwm_gpio_to_slice_num(pin);
+    // Configurar o duty cycle para 50% (ativo)
+    pwm_set_gpio_level(pin, 2048);
 
-    // Define explicitamente o divisor do PWM para 16
-    pwm_set_clkdiv(slice, 16.0f);
-
-    uint32_t clock_freq = clock_get_hz(clk_sys);
-
-    // Calcula o valor de wrap para a frequência desejada
-    uint32_t top = (clock_freq / (frequency * 16)) - 1;
-
-    pwm_set_wrap(slice, top);
-
-    // Configura duty cycle em 50% usando o valor calculado para top
-    pwm_set_gpio_level(pin, top / 2);
-    pwm_set_enabled(slice, true);
-
+    // Temporização
     sleep_ms(duration_ms);
 
-    // Interrompe o som após a duração
-    pwm_set_enabled(slice, false);
+    // Desativar o sinal PWM (duty cycle 0)
+    pwm_set_gpio_level(pin, 0);
+
+    // Pausa entre os beeps
+    sleep_ms(100); // Pausa de 100ms
 }
 
 /**
