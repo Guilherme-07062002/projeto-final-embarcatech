@@ -15,72 +15,117 @@
 #include "ssd1306.h"
 #include "neopixel.c"
 
-#define WIFI_SSID "CAVALO_DE_TROIA"
-#define WIFI_PASS "81001693"
+// ---------------------- Definições ----------------------
 
-// Variavel que indica que a mensagem foi recebida
-bool mensagem_recebida = false;
+// Credênciais da rede Wi-Fi
+#define WIFI_SSID "CAVALO_DE_TROIA" // SSID da rede Wi-Fi
+#define WIFI_PASS "81001693" // Senha da rede Wi-Fi
 
-
-#define MAX_PERGUNTAS 3 // Número máximo de perguntas a serem recebidas
-#define MAX_PERGUNTA_LENGTH 100 // Tamanho máximo de cada pergunta
-
-// Array para armazenar as perguntas
-char perguntas[MAX_PERGUNTAS][MAX_PERGUNTA_LENGTH];
-
-#define BUTTON_A 5    // GPIO conectado ao Botão A
-#define BUTTON_B 6    // GPIO conectado ao Botão B
-
-// Pinos e módulo I2C
-#define I2C_PORT i2c1
-#define PINO_SCL 14
-#define PINO_SDA 15
-
-// Pino do botão do joystick
-const int SW = 22;
-
-// Pinos usados para ADC (joystick) e PWM
-const int VRY = 27;          // Eixo Y do joystick (ADC)
-#define ADC_CHANNEL_0 0      // Canal ADC para o eixo X
-#define ADC_CHANNEL_1 1      // Canal ADC para o eixo Y
-
-#define RESPONSE_BUFFER_SIZE 2048
-
+// Variáveis relacionadas ao cliente HTTP
+#define RESPONSE_BUFFER_SIZE 2048 // Tamanho do buffer para armazenar a resposta HTTP
 static char response_buffer[RESPONSE_BUFFER_SIZE];
 static int response_length = 0;
 static ip_addr_t server_ip;
 
-ssd1306_t disp; // Display OLED
+// Variáveis globais para armazenar as perguntas
+#define MAX_PERGUNTAS 3 // Número máximo de perguntas a serem recebidas
+#define MAX_PERGUNTA_LENGTH 100 // Tamanho máximo de cada pergunta
+char perguntas[MAX_PERGUNTAS][MAX_PERGUNTA_LENGTH]; // Array para armazenar as perguntas
 
-// Ponteiro para o texto a ser exibido com rolagem (corpo da resposta HTTP)
-static char *display_message = NULL;
+// Pinos dos botões
+#define BUTTON_A 5    // GPIO conectado ao Botão A
+#define BUTTON_B 6    // GPIO conectado ao Botão B
 
-// Variáveis globais para acumular a posição do scroll
-int scroll_y = 0;
-
-// Variavel que irá indicar quando o botão foi pressionado para enviar a requisição HTTP
-bool botao_foi_pressionado = false;
-
-// Variavel que irá indicar se botão B foi pressionado para quando enviar requisição HTTP enviar pergunta escolhida
-bool botao_b_foi_pressionado = false;
-
-// Variável para indicar qual pergunta foi selecionada
-int pergunta_selecionada = 0;
-
-// Variável para indicar se a mensagem está sendo processada
-bool esta_processando = false;
-
-// Variável para indicar se a inicialização foi completada
-bool inicializacao_completa = false;
-
-#define MAX_AUDIO_SAMPLES 16000  // Exemplo: espaço para 16.000 amostras (ajuste conforme necessário)
-uint16_t audio_buffer[MAX_AUDIO_SAMPLES];
-volatile int audio_index = 0;
+// Pinos usados para ADC (joystick) e PWM
+const int VRY = 27;          // Eixo Y do joystick (ADC)
+const int SW = 22; // Pino do botão do joystick
+#define ADC_CHANNEL_0 0      // Canal ADC para o eixo X
+#define ADC_CHANNEL_1 1      // Canal ADC para o eixo Y
 
 // Parâmetros para definir os limiares e a velocidade do scroll
 #define JOY_THRESHOLD_UP    2500   // se ADC Y maior que este valor, rola para cima
 #define JOY_THRESHOLD_DOWN  1600   // se ADC Y menor que este valor, rola para baixo
 #define SCROLL_SPEED        2      // pixels por iteração
+
+// Pinos e módulo I2C
+#define I2C_PORT i2c1
+#define PINO_SCL 14 
+#define PINO_SDA 15 
+
+// Configuração do display OLED
+ssd1306_t disp; // Display OLED
+
+// Variáveis para gerenciamento de estado da aplicação
+static char *display_message = NULL; // Ponteiro para o texto a ser exibido com rolagem (corpo da resposta HTTP)
+int scroll_y = 0; // Variável para acumular a posição do scroll
+int pergunta_selecionada = 0; // Variável para indicar qual pergunta foi selecionada
+bool mensagem_recebida = false; // Variavel que indica que a mensagem foi recebida
+bool botao_foi_pressionado = false; // Variavel que irá indicar quando o botão foi pressionado para enviar a requisição HTTP
+bool botao_b_foi_pressionado = false; // Variavel que irá indicar se botão B foi pressionado para quando enviar requisição HTTP enviar pergunta escolhida
+bool esta_processando = false; // Variável para indicar se a mensagem está sendo processada
+bool inicializacao_completa = false; // Variável para indicar se a inicialização foi completada
+bool program_running = false; // Indica se um programa acionado pelo botão b está em execução
+#define abs(x) ((x < 0) ? (-x) : (x)) // Função para retornar o valor absoluto de um número
+uint pos_y = 12; // Variável de controle do menu (posição Y do seletor)
+
+// Configuração do microfone
+volatile int audio_index = 0; // Índice atual no buffer de áudio
+#define MAX_AUDIO_SAMPLES 16000  // Exemplo: espaço para 16.000 amostras (ajuste conforme necessário)
+uint16_t audio_buffer[MAX_AUDIO_SAMPLES]; // Buffer para armazenar as amostras do microfone
+#define MIC_CHANNEL 2 // Canal do microfone no ADC.
+#define MIC_PIN (26 + MIC_CHANNEL) // Pino do microfone.
+
+// Parâmetros e macros do ADC.
+#define ADC_CLOCK_DIV 96.f
+#define SAMPLES 200 // Número de amostras que serão feitas do ADC.
+#define ADC_ADJUST(x) (x * 3.3f / (1 << 12u) - 1.65f) // Ajuste do valor do ADC para Volts.
+#define ADC_MAX 3.3f // Valor máximo do ADC.
+#define ADC_STEP (3.3f/5.f) // Intervalos de volume do microfone.
+uint16_t adc_buffer[SAMPLES]; // Buffer de amostras do ADC.
+
+// Canal e configurações do DMA
+uint dma_channel; // Canal DMA
+dma_channel_config dma_cfg; // Configuração do canal DMA
+
+// Pino e número de LEDs da matriz de LEDs.
+#define LED_PIN 7 // Pino de dados da matriz de LEDs
+#define LED_COUNT 25 // Número de LEDs na matriz
+
+// Pinos e módulo I2C
+#define I2C_PORT i2c1 // Módulo I2C
+#define PINO_SCL 14 // Pino SCL
+#define PINO_SDA 15 // Pino SDA
+
+// Configuração do buzzer
+#define BUZZER_PIN 21 // Configuração do pino do buzzer
+#define BUZZER_FREQUENCY 100 // Frequência do buzzer em Hz
+
+// Configurações codificação base64
+static const char base64_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"; // Caracteres base64
+static const int mod_table[] = {0, 2, 1}; // Tabela para calcular os caracteres de padding
+
+// Protótipos de funções
+void sample_mic();
+float mic_power();
+uint8_t get_intensity(float v);
+void draw_notification();
+void beep(uint pin, uint duration_ms);
+void pwm_init_buzzer(uint pin);
+void base64_encode(const uint8_t *data, size_t input_length, char *encoded_data, size_t encoded_size);
+void draw_smile();
+void stop_program();
+void init_display();
+void init_joystick();
+void joystick_read_axis(uint16_t *vry_value);
+void capture_audio_block();
+void print_texto(char *msg, uint pos_x, uint pos_y, uint scale);
+void print_retangulo(int x1, int y1, int x2, int y2);
+void desenha_menu();
+void joystick_read_axis_menu_oled(uint16_t *vrx_value, uint16_t *vry_value);
+void print_texto_scroll(const char *msg, int offset_x, int offset_y, uint scale);
+void trim(char *str);
+
+// ---------------------- Funções ----------------------
 
 /**
  * Limpa o display OLED.
@@ -129,6 +174,9 @@ void print_texto_scroll(const char *msg, int offset_x, int offset_y, uint scale)
     ssd1306_show(&disp);
 }
 
+/**
+ * Função para remover espaços em branco à esquerda e à direita de uma string.
+ */
 void trim(char *str) {
     char *start = str;
     // Remove espaços à esquerda
@@ -218,6 +266,7 @@ static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
         }
     }
 
+    // Libera o pbuf
     pbuf_free(p);
     return ERR_OK;
 }
@@ -234,18 +283,16 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
 
     // Verifica se foi realizada a inicialização completa
     if (inicializacao_completa == true){
-        // Declara o buffer para a requisição HTTP
-        char http_request[1000]; // 1000 bytes adicionais para o restante da requisição HTTP
-
-        // Monta o corpo JSON com a pergunta escolhida
+        // Declara o buffer para a requisição HTTP e o corpo JSON
+        char http_request[1000];
         char json_body[1000];
         
+        // Monta o corpo JSON
         snprintf(json_body, sizeof(json_body), "{\"message\": \"Forneça-me 3 tópicos de perguntas sobre conhecimentos gerais, separadas por vírgula sem espaço entre elas, com no máximo 3 palavras cada. Elas serão exibidas em um display OLED. Retorne APENAS o texto com os tópicos, sem aspas e sem qualquer texto adicional. Exemplos: Capital da Franca,Autor de Dom Quixote,Número de planetas.\"}");
-        
         int json_length = strlen(json_body);
 
         printf("Corpo JSON: %s\n", json_body);
-
+        // Monta a requisição HTTP
         snprintf(http_request, sizeof(http_request),
                 "POST /ai?senha=secret-bitdog HTTP/1.1\r\n"
                 "Host: bitdog-api.guilherme762002.workers.dev\r\n"
@@ -285,6 +332,7 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
             return ERR_MEM;
         }
 
+        // Codifica o áudio em base64
         base64_encode((const uint8_t*)audio_buffer, captured_audio_bytes, encoded_audio, required_size);
         printf("Áudio codificado em base64: %s\n", encoded_audio);
 
@@ -308,12 +356,14 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
         // Declara o buffer para a requisição HTTP
         char http_request[json_body_size + 200]; // 200 bytes adicionais para o restante da requisição HTTP
 
+        // Esse json_body e length de teste comprovam que é possível realizar a requisição passando o base64 codificado
+        // Desde que o tamanho do body seja inferior
         // // json body de teste
         // char json_body_teste[] = "{\"audioBase64\": \"U29ycnksIEkgY2Fubm90IGhlbHAgdG8gYmUgYSB0ZXN0IGJvZHk=\"}";
-
         // // length do json body de teste
         // int json_length_teste = strlen(json_body_teste);
 
+        // Monta a requisição HTTP
         snprintf(http_request, sizeof(http_request),
                 "POST /voice-to-text?senha=secret-bitdog HTTP/1.1\r\n"
                 "Host: bitdog-api.guilherme762002.workers.dev\r\n"
@@ -342,39 +392,36 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
         tcp_output(tpcb); // Envia imediatamente
         printf("Requisição HTTP enviada\n");
             
-        // Esvazia o buffer de áudio
+        // Libera a memória alocada
         audio_index = 0;
-                
         free(encoded_audio);
         free(json_body);
     } else if (botao_b_foi_pressionado == true){
-        // Declara o buffer para a requisição HTTP
-        char http_request[1000]; // 1000 bytes adicionais para o restante da requisição HTTP
-
-        // Monta o corpo JSON com a pergunta escolhida
+        // Declara o buffer para a requisição HTTP e o corpo JSON
+        char http_request[1000];
         char json_body[1000];
 
         // Switch case para montar o json_body de acordo com a pergunta escolhida
         switch (pergunta_selecionada)
         {
             case 12:
-                printf("Montando json_body para a pergunta 12\n");
+                printf("Montando json_body para a primeira pergunta\n");
                 snprintf(json_body, sizeof(json_body), "{\"message\": \"%s\"}", perguntas[0]);
                 break;
             case 24:
-                printf("Montando json_body para a pergunta 24\n");
+                printf("Montando json_body para a segunda pergunta\n");
                 snprintf(json_body, sizeof(json_body), "{\"message\": \"%s\"}", perguntas[1]);
                 break;
             case 36:
-                printf("Montando json_body para a pergunta 36\n");
+                printf("Montando json_body para a terceira pergunta\n");
                 snprintf(json_body, sizeof(json_body), "{\"message\": \"%s\"}", perguntas[2]);
                 break;
             default:
                 break;  
         }
         
+        // Calcula o tamanho do json_body
         int json_length = strlen(json_body);
-
         printf("Corpo JSON: %s\n", json_body);
 
         snprintf(http_request, sizeof(http_request),
@@ -403,6 +450,7 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
         tcp_output(tpcb); // Envia imediatamente
         printf("Requisição HTTP enviada\n");
                 
+        // Libera a memória alocada
         pergunta_selecionada = 0;
     }
     
@@ -438,6 +486,7 @@ static void dns_callback(const char *name, const ip_addr_t *ipaddr, void *callba
  * Função para enviar a requisição HTTP.
  */
 static void send_http_request(void) {
+    // Limpa o buffer da resposta anterior
     response_length = 0;
     memset(response_buffer, 0, RESPONSE_BUFFER_SIZE);
     err_t err = dns_gethostbyname("bitdog-api.guilherme762002.workers.dev", &server_ip, dns_callback, NULL);
@@ -499,48 +548,6 @@ void init_joystick(){
     gpio_pull_up(SW);
 }
 
-
-// Pino e canal do microfone no ADC.
-#define MIC_CHANNEL 2
-#define MIC_PIN (26 + MIC_CHANNEL)
-
-// Parâmetros e macros do ADC.
-#define ADC_CLOCK_DIV 96.f
-#define SAMPLES 200 // Número de amostras que serão feitas do ADC.
-#define ADC_ADJUST(x) (x * 3.3f / (1 << 12u) - 1.65f) // Ajuste do valor do ADC para Volts.
-#define ADC_MAX 3.3f
-#define ADC_STEP (3.3f/5.f) // Intervalos de volume do microfone.
-
-// Pino e número de LEDs da matriz de LEDs.
-#define LED_PIN 7
-#define LED_COUNT 25
-
-#define abs(x) ((x < 0) ? (-x) : (x))
-
-// Pinos e módulo I2C
-#define I2C_PORT i2c1
-#define PINO_SCL 14
-#define PINO_SDA 15
-
-// Configuração do pino do buzzer
-#define BUZZER_PIN 21
-
-bool program_running = false; // Indica se um programa acionado pelo botão b está em execução
-
-// Variáveis de controle do menu
-uint pos_y = 12; // Variável de controle do menu
-
-// Canal e configurações do DMA
-uint dma_channel;
-dma_channel_config dma_cfg;
-
-// Buffer de amostras do ADC.
-uint16_t adc_buffer[SAMPLES];
-
-void sample_mic();
-float mic_power();
-uint8_t get_intensity(float v);
-
 /**
  * Realiza as leituras do ADC e armazena os valores no buffer.
  */
@@ -571,7 +578,7 @@ void sample_mic() {
  */
 float mic_power() {
     float avg = 0.f;
-  
+    
     for (uint i = 0; i < SAMPLES; ++i)
       avg += adc_buffer[i] * adc_buffer[i];
     
@@ -586,7 +593,6 @@ float mic_power() {
         printf("Tensão: %f\n", v);
         
         uint count = 0;
-        
         while ((v -= ADC_STEP/20) > 0.f)
           ++count;
         
@@ -608,11 +614,12 @@ void draw_notification() {
     beep(BUZZER_PIN, 100); // Bipe de 500ms
 
     npWrite();
-
     sleep_ms(500);
 }
 
-// Função para capturar e armazenar um bloco de amostras
+/**
+ * Função para capturar e armazenar um bloco de amostras de áudio no buffer global.
+ */
 void capture_audio_block() {
     size_t total_bytes = audio_index * sizeof(uint16_t);
     // Captura um bloco de SAMPLES amostras (já implementado em sample_mic())
@@ -623,23 +630,23 @@ void capture_audio_block() {
         memcpy(&audio_buffer[audio_index], adc_buffer, SAMPLES * sizeof(uint16_t));
         audio_index += SAMPLES;
     } else {
-        // Buffer cheio - pode definir uma flag para interromper a gravação ou descartar o excesso
         printf("Buffer de áudio cheio!\n");
     }
 }
 
-static const char base64_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-// Tabela para calcular os caracteres de padding
-static const int mod_table[] = {0, 2, 1};
-
+/**
+ * Função para codificar um buffer em base64.
+ */
 void base64_encode(const uint8_t *data, size_t input_length, char *encoded_data, size_t encoded_size) {
+    // Tamanho do buffer de saída
     size_t output_length = 4 * ((input_length + 2) / 3);
     if (encoded_size < output_length + 1) {
         // O buffer fornecido não é grande o suficiente
         return;
     }
     size_t i, j;
+
+    // Codifica os dados em grupos de 3 octetos
     for (i = 0, j = 0; i < input_length;) {
         uint32_t octet_a = i < input_length ? data[i++] : 0;
         uint32_t octet_b = i < input_length ? data[i++] : 0;
@@ -685,7 +692,9 @@ void print_retangulo(int x1, int y1, int x2, int y2) {
     ssd1306_show(&disp);
 }
 
-// Desenha o menu na tela OLED
+/**
+ * Desenha o menu no display OLED
+ */
 void desenha_menu() {
     ssd1306_clear(&disp);
     print_texto("Selecione a pergunta", 6, 2, 1);
@@ -730,9 +739,6 @@ void stop_program() {
     // Desenha o menu novamente
     desenha_menu();
 }
-
-// Configuração da frequência do buzzer (em Hz)
-#define BUZZER_FREQUENCY 100
 
 // Definição de uma função para inicializar o PWM no pino do buzzer
 void pwm_init_buzzer(uint pin) {
@@ -885,28 +891,19 @@ int menu_oled() {
                     case 12:
                         printf("Primeira opção selecionada\n");
                         pergunta_selecionada = 12;
-
-                        // Envia requisição HTTP
                         send_http_request();
-
                         print_texto_scroll("Processando...", 0, 0, 1);
                         break;
                     case 24:
                         printf("Segunda opção selecionada\n");    
                         pergunta_selecionada = 24;
-
-                        // Envia requisição HTTP 
                         send_http_request();
-
                         print_texto_scroll("Processando...", 0, 0, 1);
                         break;
                     case 36:
                         printf("Terceira opção selecionada\n");
                         pergunta_selecionada = 36;
-
-                        // Envia requisição HTTP
                         send_http_request();
-
                         print_texto_scroll("Processando...", 0, 0, 1);
                         break;
                 }
@@ -958,8 +955,10 @@ int main() {
         printf("Erro ao inicializar o Wi-Fi\n");
         return 1;
     }
+
     cyw43_arch_enable_sta_mode();
     printf("Conectando ao Wi-Fi...\n");
+
     if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASS, CYW43_AUTH_WPA2_AES_PSK, 10000)) {
         print_texto_scroll("Falha ao conectar ao Wi-Fi", 0, 0, 1);
         printf("Falha ao conectar ao Wi-Fi\n");
@@ -969,16 +968,17 @@ int main() {
         uint8_t *ip_address = (uint8_t*)&(cyw43_state.netif[0].ip_addr.addr);
         printf("Endereço IP %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
     }
+
     printf("Wi-Fi conectado!\n");
 
     // Preparação da matriz de LEDs.
     npInit(LED_PIN, LED_COUNT);
 
     // Preparação do ADC.
-    printf("Preparando ADC...\n");
     adc_gpio_init(MIC_PIN);
     adc_init();
 
+    // Configuração do ADC.
     adc_select_input(MIC_CHANNEL);
     adc_fifo_setup(
         true, // Habilitar FIFO
@@ -988,24 +988,18 @@ int main() {
         false // Não fazer downscale das amostras para 8-bits, manter 12-bits.
     );
     adc_set_clkdiv(ADC_CLOCK_DIV);
-    printf("ADC Configurado!\n\n");
 
-    printf("Preparando DMA...\n");
     // Tomando posse de canal do DMA.
     dma_channel = dma_claim_unused_channel(true);
-    
+
     // Configurações do DMA.
     dma_cfg = dma_channel_get_default_config(dma_channel);
-    
     channel_config_set_transfer_data_size(&dma_cfg, DMA_SIZE_16); // Tamanho da transferência é 16-bits (usamos uint16_t para armazenar valores do ADC)
     channel_config_set_read_increment(&dma_cfg, false); // Desabilita incremento do ponteiro de leitura (lemos de um único registrador)
     channel_config_set_write_increment(&dma_cfg, true); // Habilita incremento do ponteiro de escrita (escrevemos em um array/buffer)
-    
     channel_config_set_dreq(&dma_cfg, DREQ_ADC); // Usamos a requisição de dados do ADC
-
-    // Amostragem de teste.
-    printf("Amostragem de teste...\n");
-    sample_mic();
+    
+    sample_mic(); // Realiza uma amostragem do microfone para testar o funcionamento.	
     printf("Configurações completas!\n");
 
     inicializacao_completa = true;
