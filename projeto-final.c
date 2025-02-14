@@ -182,6 +182,7 @@ static err_t http_client_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
                 }
 
                 inicializacao_completa = false;
+                print_texto_scroll("Pressione e segure A para falar ou pressione B para escolher uma pergunta", 0, 0, 1);
             } else {
                 body += 4; // Pula as quebras de linha
                 printf("Corpo da resposta:\n%s\n", body);
@@ -238,7 +239,7 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
         // Monta o corpo JSON com a pergunta escolhida
         char json_body[1000];
         
-        snprintf(json_body, sizeof(json_body), "{\"message\": \"Forneça-me apenas 3 exemplos de perguntas sobre conhecimentos gerais, separadas por vírgula. Elas serão exibidas em um display OLED. Me retorne apenas o texto com as 3 perguntas. Exemplo: 'Qual e a capital da Franca,Quem e o autor de A Odiseia,Qual e o planeta mais distante do Sol'\"}");
+        snprintf(json_body, sizeof(json_body), "{\"message\": \"Forneça-me 3 tópicos de perguntas sobre conhecimentos gerais, separadas por vírgula sem espaço entre elas, com no máximo 3 palavras cada. Elas serão exibidas em um display OLED. Retorne APENAS o texto com os tópicos, sem aspas e sem qualquer texto adicional. Exemplos: Capital da Franca,Autor de Dom Quixote,Número de planetas.\"}");
         
         int json_length = strlen(json_body);
 
@@ -692,6 +693,7 @@ void desenha_menu() {
     }
 }
 
+
 /**
  * Lê os valores dos eixos do joystick (X e Y)
  * 
@@ -713,6 +715,8 @@ void joystick_read_axis_menu_oled(uint16_t *vrx_value, uint16_t *vry_value) {
 // Interrompe a execução do programa atual e retorna ao menu
 void stop_program() {
     program_running = false;
+    display_message = NULL;
+    mensagem_recebida = false;
 
     // Desenha o menu novamente
     desenha_menu();
@@ -766,6 +770,11 @@ int menu_oled() {
     uint countup = 2;   // Para controle de histerese (movimento para cima)
     uint last_pos_y = pos_y;
 
+    // Variáveis para leitura do joystick e cálculo dos offsets
+    uint16_t vry_value = 0;
+    int offset_y = 0;
+    int prev_scroll_y = scroll_y; // Armazena o valor anterior de scroll_y
+
     while (1) {
         // Usa ADC (canal 0) para detectar o movimento do joystick no eixo Y
         adc_select_input(0);
@@ -795,6 +804,8 @@ int menu_oled() {
 
         // Se o botão A for pressionado, sai da função menu_oled
         if (gpio_get(BUTTON_A) == 0) {
+            botao_b_foi_pressionado = false;
+
             return 0;
 
             // Aguarda liberação do botão para evitar múltiplas detecções
@@ -809,6 +820,24 @@ int menu_oled() {
 
             // Marca que a mensagem foi exibida
             mensagem_recebida = false;
+        }
+
+        
+        if (display_message != NULL) {
+            joystick_read_axis(&vry_value); // Lê apenas o eixo Y
+
+            // Atualiza a rolagem vertical
+            if (vry_value > JOY_THRESHOLD_UP) { // joystick inclinado para cima
+                scroll_y += SCROLL_SPEED;
+            } else if (vry_value < JOY_THRESHOLD_DOWN) { // joystick inclinado para baixo
+                scroll_y -= SCROLL_SPEED;
+            }
+
+            // Desenha o display apenas se scroll_y mudou
+            if (scroll_y != prev_scroll_y) {
+                print_texto_scroll(display_message, 0, scroll_y, 1);
+                prev_scroll_y = scroll_y; // Atualiza o valor anterior de scroll_y
+            }
         }
 
         // Verifica se o botão do joystick foi pressionado
@@ -948,8 +977,6 @@ int main() {
 
     // Envia requisição HTTP para obter as perguntas
     send_http_request();
-
-    print_texto_scroll("Pressione e segure A para falar ou pressione B para escolher uma pergunta", 0, 0, 1);
 
     // Variáveis para leitura do joystick e cálculo dos offsets
     uint16_t vry_value = 0;
