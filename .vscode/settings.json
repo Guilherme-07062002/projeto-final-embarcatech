@@ -44,7 +44,19 @@
         "stdio.h": "c",
         "pwm.h": "c",
         "string.h": "c",
-        "clocks.h": "c"
+        "clocks.h": "c",
+        "stdlib.h": "c",
+        "stdint.h": "c",
+        "adc.h": "c",
+        "internet.h": "c",
+        "tcp.h": "c",
+        "display.h": "c",
+        "buzzer.h": "c",
+        "matriz.h": "c",
+        "microfone.h": "c",
+        "neopixel.h": "c",
+        "ssd1306.h": "c",
+        "ws2818b.pio.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

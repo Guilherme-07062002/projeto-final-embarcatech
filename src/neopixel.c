@@ -1,22 +1,9 @@
-#ifndef __NEOPIXEL_INC
-#define __NEOPIXEL_INC
-
-#include <stdlib.h>
-#include "ws2818b.pio.h"
-
-// Definição de pixel GRB
-struct pixel_t {
-  uint8_t G, R, B; // Três valores de 8-bits compõem um pixel.
-};
-typedef struct pixel_t pixel_t;
-typedef pixel_t npLED_t; // Mudança de nome de "struct pixel_t" para "npLED_t" por clareza.
-
-
-// Declaração do buffer de pixels que formam a matriz.
-static npLED_t *leds;
-static uint led_count;
+#include "neopixel.h"
+#include "ws2818b.pio.h" // Certifique-se que este path esteja correto
 
 // Variáveis para uso da máquina PIO.
+static npLED_t *leds;
+static uint led_count;
 static PIO np_pio;
 static uint np_sm;
 
@@ -54,9 +41,11 @@ void npInit(uint pin, uint amount) {
  * Atribui uma cor RGB a um LED.
  */
 void npSetLED(const uint index, const uint8_t r, const uint8_t g, const uint8_t b) {
-  leds[index].R = r;
-  leds[index].G = g;
-  leds[index].B = b;
+  if (index < led_count) { // Verifica se o índice é válido
+    leds[index].R = r;
+    leds[index].G = g;
+    leds[index].B = b;
+  }
 }
 
 /**
@@ -79,5 +68,3 @@ void npWrite() {
   }
   sleep_us(100); // Espera 100us, sinal de RESET do datasheet.
 }
-
-#endif

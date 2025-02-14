@@ -35,13 +35,25 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(projeto-final projeto-final.c ssd1306.c)
+add_executable(projeto-final 
+        projeto-final.c 
+        src/ssd1306.c 
+        src/globals.c
+        src/matriz.c
+        src/buzzer.c
+        src/display.c
+        src/internet.c
+        src/microfone.c
+        src/base64.c
+        src/joystick.c
+        src/neopixel.c
+        )
 
 pico_set_program_name(projeto-final "projeto-final")
 pico_set_program_version(projeto-final "0.1")
 
 # Generate PIO header
-pico_generate_pio_header(projeto-final ${CMAKE_CURRENT_LIST_DIR}/ws2818b.pio)
+pico_generate_pio_header(projeto-final ${CMAKE_CURRENT_LIST_DIR}/pio/ws2818b.pio)
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(projeto-final 0)
@@ -55,6 +67,7 @@ target_link_libraries(projeto-final
 # Add the standard include files to the build
 target_include_directories(projeto-final PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
+        ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
 # Add any user requested libraries
