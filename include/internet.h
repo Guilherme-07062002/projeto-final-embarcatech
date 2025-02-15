@@ -13,8 +13,8 @@
 #include "base64.h"
 
 // Credênciais da rede Wi-Fi
-#define WIFI_SSID "CAVALO_DE_TROIA" // SSID da rede Wi-Fi
-#define WIFI_PASS "81001693" // Senha da rede Wi-Fi
+#define WIFI_SSID "" // SSID da rede Wi-Fi
+#define WIFI_PASS "" // Senha da rede Wi-Fi
 
 // Variáveis globais para armazenar as perguntas
 #define MAX_PERGUNTAS 3 // Número máximo de perguntas a serem recebidas

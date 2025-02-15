@@ -49,6 +49,12 @@ int main() {
     cyw43_arch_enable_sta_mode();
     printf("Conectando ao Wi-Fi...\n");
 
+    if(WIFI_SSID == "" || WIFI_PASS == "") {
+        print_texto_scroll("Informe as credenciais Wi-Fi em 'WIFI_SSID' e 'WIFI_PASS' no arquivo internet.h", 0, 0, 1);
+        printf("Credenciais Wi-Fi nao configuradas\n");
+        return 1;
+    }
+
     if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASS, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
         print_texto_scroll("Falha ao conectar ao Wi-Fi", 0, 0, 1);
         printf("Falha ao conectar ao Wi-Fi\n");
