@@ -105,7 +105,7 @@ err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) {
         char json_body[1000];
         
         // Monta o corpo JSON
-        snprintf(json_body, sizeof(json_body), "{\"message\": \"Forneça-me 3 tópicos de perguntas sobre conhecimentos gerais, separadas por vírgula sem espaço entre elas, com no máximo 3 palavras cada. Elas serão exibidas em um display OLED. Retorne APENAS o texto com os tópicos, sem aspas e sem qualquer texto adicional. Exemplos: Capital da Franca,Autor de Dom Quixote,Número de planetas.\"}");
+        snprintf(json_body, sizeof(json_body), "{\"message\": \"[PROMPT INICIAL] Forneça-me 3 tópicos de perguntas sobre conhecimentos gerais, separadas por vírgula sem espaço entre elas, com no máximo 3 palavras cada. Elas serão exibidas em um display OLED. Retorne APENAS o texto com os tópicos, sem aspas e sem qualquer texto adicional. Exemplos: Capital da Franca,Autor de Dom Quixote,Número de planetas.\"}");
         int json_length = strlen(json_body);
 
         printf("Corpo JSON: %s\n", json_body);
